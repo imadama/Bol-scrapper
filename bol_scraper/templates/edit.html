@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bewerk Productdata - Bol.com Scraper</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: #2c3e50;
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2rem;
+            margin-bottom: 10px;
+        }
+        
+        .content {
+            padding: 40px;
+        }
+        
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 25px;
+        }
+        
+        .form-group {
+            margin-bottom: 25px;
+        }
+        
+        .form-group.full-width {
+            grid-column: 1 / -1;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+        
+        input, textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e1e8ed;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+            font-family: inherit;
+        }
+        
+        input:focus, textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        textarea {
+            min-height: 120px;
+            resize: vertical;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 15px;
+            margin-top: 30px;
+            justify-content: center;
+        }
+        
+        .btn {
+            padding: 15px 30px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: inline-block;
+            text-align: center;
+        }
+        
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #5a6fd8;
+            transform: translateY(-2px);
+        }
+        
+        .btn-secondary {
+            background: #95a5a6;
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background: #7f8c8d;
+            transform: translateY(-2px);
+        }
+        
+        .field-info {
+            font-size: 12px;
+            color: #7f8c8d;
+            margin-top: 5px;
+        }
+        
+        .image-preview {
+            max-width: 200px;
+            max-height: 200px;
+            border-radius: 8px;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>✏️ Bewerk Productdata</h1>
+            <p>Controleer en pas de gescrapete data aan</p>
+        </div>
+        
+        <div class="content">
+            <form method="POST">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="source_url">Bron URL:</label>
+                        <input type="url" id="source_url" name="source_url" value="{{ data.source_url }}" readonly>
+                        <div class="field-info">Alleen-lezen</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="title">Titel:</label>
+                        <input type="text" id="title" name="title" value="{{ data.title }}">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="brand">Merk:</label>
+                        <input type="text" id="brand" name="brand" value="{{ data.brand }}">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="ean">EAN:</label>
+                        <input type="text" id="ean" name="ean" value="{{ data.ean }}">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="price_text">Prijs (tekst):</label>
+                        <input type="text" id="price_text" name="price_text" value="{{ data.price_text }}">
+                        <div class="field-info">Bijv: "64,74"</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="price_value">Prijs (waarde):</label>
+                        <input type="number" id="price_value" name="price_value" 
+                               value="{{ data.price_value if data.price_value else '' }}" 
+                               step="0.01">
+                        <div class="field-info">Bijv: 64.74</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="list_price_text">Adviesprijs (tekst):</label>
+                        <input type="text" id="list_price_text" name="list_price_text" value="{{ data.list_price_text }}">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="list_price_value">Adviesprijs (waarde):</label>
+                        <input type="number" id="list_price_value" name="list_price_value" 
+                               value="{{ data.list_price_value if data.list_price_value else '' }}" 
+                               step="0.01">
+                    </div>
+                    
+                    <div class="form-group full-width">
+                        <label for="description">Beschrijving:</label>
+                        <textarea id="description" name="description">{{ data.description }}</textarea>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="main_image">Hoofdafbeelding:</label>
+                        <input type="url" id="main_image" name="main_image" value="{{ data.main_image }}">
+                        {% if data.main_image %}
+                            <img src="{{ data.main_image }}" alt="Hoofdafbeelding" class="image-preview">
+                        {% endif %}
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="all_images">Alle afbeeldingen:</label>
+                        <textarea id="all_images" name="all_images" rows="4">{{ data.all_images }}</textarea>
+                        <div class="field-info">Gescheiden door |</div>
+                    </div>
+                </div>
+                
+                <div class="button-group">
+                    <a href="{{ url_for('index') }}" class="btn btn-secondary">
+                        ← Terug
+                    </a>
+                    <button type="submit" class="btn btn-primary">
+                        Bevestigen →
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</body>
+</html>
