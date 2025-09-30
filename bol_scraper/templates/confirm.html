@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bevestig Opslaan - Bol.com Scraper</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: #2c3e50;
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2rem;
+            margin-bottom: 10px;
+        }
+        
+        .content {
+            padding: 40px;
+        }
+        
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 30px;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        .data-table th {
+            background: #f8f9fa;
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+            color: #2c3e50;
+            border-bottom: 2px solid #e9ecef;
+            width: 200px;
+        }
+        
+        .data-table td {
+            padding: 15px;
+            border-bottom: 1px solid #e9ecef;
+            word-break: break-word;
+        }
+        
+        .data-table tr:last-child td {
+            border-bottom: none;
+        }
+        
+        .data-table tr:nth-child(even) {
+            background: #f8f9fa;
+        }
+        
+        .url-cell {
+            max-width: 300px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        
+        .url-cell a {
+            color: #667eea;
+            text-decoration: none;
+        }
+        
+        .url-cell a:hover {
+            text-decoration: underline;
+        }
+        
+        .description-cell {
+            max-width: 300px;
+            max-height: 100px;
+            overflow-y: auto;
+        }
+        
+        .image-cell {
+            max-width: 200px;
+        }
+        
+        .image-cell img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 4px;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+        }
+        
+        .btn {
+            padding: 15px 30px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: inline-block;
+            text-align: center;
+        }
+        
+        .btn-primary {
+            background: #27ae60;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #229954;
+            transform: translateY(-2px);
+        }
+        
+        .btn-secondary {
+            background: #95a5a6;
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background: #7f8c8d;
+            transform: translateY(-2px);
+        }
+        
+        .alert {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+        
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .empty-value {
+            color: #95a5a6;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>✅ Bevestig Opslaan</h1>
+            <p>Controleer de data voordat je opslaat in Excel</p>
+        </div>
+        
+        <div class="content">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ 'success' if category == 'success' else 'error' }}">
+                            {{ message }}
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+            
+            <table class="data-table">
+                <tr>
+                    <th>Bron URL:</th>
+                    <td class="url-cell">
+                        <a href="{{ data.source_url }}" target="_blank">{{ data.source_url }}</a>
+                    </td>
+                </tr>
+                <tr>
+                    <th>Titel:</th>
+                    <td>{{ data.title or '<span class="empty-value">Niet gevonden</span>'|safe }}</td>
+                </tr>
+                <tr>
+                    <th>Merk:</th>
+                    <td>{{ data.brand or '<span class="empty-value">Niet gevonden</span>'|safe }}</td>
+                </tr>
+                <tr>
+                    <th>Prijs (tekst):</th>
+                    <td>{{ data.price_text or '<span class="empty-value">Niet gevonden</span>'|safe }}</td>
+                </tr>
+                <tr>
+                    <th>Prijs (waarde):</th>
+                    <td>{{ data.price_value or '<span class="empty-value">Niet gevonden</span>'|safe }}</td>
+                </tr>
+                <tr>
+                    <th>Adviesprijs (tekst):</th>
+                    <td>{{ data.list_price_text or '<span class="empty-value">Niet gevonden</span>'|safe }}</td>
+                </tr>
+                <tr>
+                    <th>Adviesprijs (waarde):</th>
+                    <td>{{ data.list_price_value or '<span class="empty-value">Niet gevonden</span>'|safe }}</td>
+                </tr>
+                <tr>
+                    <th>EAN:</th>
+                    <td>{{ data.ean or '<span class="empty-value">Niet gevonden</span>'|safe }}</td>
+                </tr>
+                <tr>
+                    <th>Beschrijving:</th>
+                    <td class="description-cell">{{ data.description or '<span class="empty-value">Niet gevonden</span>'|safe }}</td>
+                </tr>
+                <tr>
+                    <th>Hoofdafbeelding:</th>
+                    <td class="image-cell">
+                        {% if data.main_image %}
+                            <img src="{{ data.main_image }}" alt="Hoofdafbeelding">
+                        {% else %}
+                            <span class="empty-value">Niet gevonden</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                <tr>
+                    <th>Alle afbeeldingen:</th>
+                    <td>
+                        {% if data.all_images %}
+                            {{ data.all_images.split('|')|length }} afbeelding(en) gevonden
+                        {% else %}
+                            <span class="empty-value">Geen afbeeldingen gevonden</span>
+                        {% endif %}
+                    </td>
+                </tr>
+            </table>
+            
+            <div class="button-group">
+                <a href="{{ url_for('edit') }}" class="btn btn-secondary">
+                    ← Terug Bewerken
+                </a>
+                <form method="POST" style="display: inline;">
+                    <button type="submit" class="btn btn-primary">
+                        💾 Opslaan in Excel
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
