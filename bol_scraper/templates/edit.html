@@ -64,7 +64,7 @@
             color: #2c3e50;
         }
         
-        input, textarea {
+        input, textarea, select {
             width: 100%;
             padding: 12px;
             border: 2px solid #e1e8ed;
@@ -74,7 +74,7 @@
             font-family: inherit;
         }
         
-        input:focus, textarea:focus {
+        input:focus, textarea:focus, select:focus {
             outline: none;
             border-color: #667eea;
         }
@@ -155,63 +155,107 @@
                     </div>
                     
                     <div class="form-group">
-                        <label for="title">Titel:</label>
-                        <input type="text" id="title" name="title" value="{{ data.title }}">
+                        <label for="Productnaam">Productnaam:</label>
+                        <input type="text" id="Productnaam" name="Productnaam" value="{{ data.title }}">
                     </div>
                     
                     <div class="form-group">
-                        <label for="brand">Merk:</label>
-                        <input type="text" id="brand" name="brand" value="{{ data.brand }}">
+                        <label for="EAN">EAN:</label>
+                        <input type="text" id="EAN" name="EAN" value="{{ data.ean }}">
                     </div>
                     
                     <div class="form-group">
-                        <label for="ean">EAN:</label>
-                        <input type="text" id="ean" name="ean" value="{{ data.ean }}">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="price_text">Prijs (tekst):</label>
-                        <input type="text" id="price_text" name="price_text" value="{{ data.price_text }}">
-                        <div class="field-info">Bijv: "64,74"</div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="price_value">Prijs (waarde):</label>
-                        <input type="number" id="price_value" name="price_value" 
-                               value="{{ data.price_value if data.price_value else '' }}" 
+                        <label for="Prijs">Prijs:</label>
+                        <input type="number" id="Prijs" name="Prijs" 
+                               value="{{ data.list_price_value if data.list_price_value else '' }}" 
                                step="0.01">
                         <div class="field-info">Bijv: 64.74</div>
                     </div>
                     
-                    <div class="form-group">
-                        <label for="list_price_text">Adviesprijs (tekst):</label>
-                        <input type="text" id="list_price_text" name="list_price_text" value="{{ data.list_price_text }}">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="list_price_value">Adviesprijs (waarde):</label>
-                        <input type="number" id="list_price_value" name="list_price_value" 
-                               value="{{ data.list_price_value if data.list_price_value else '' }}" 
-                               step="0.01">
-                    </div>
-                    
                     <div class="form-group full-width">
-                        <label for="description">Beschrijving:</label>
-                        <textarea id="description" name="description">{{ data.description }}</textarea>
+                        <label for="Beschrijving">Beschrijving:</label>
+                        <textarea id="Beschrijving" name="Beschrijving">{{ data.description }}</textarea>
                     </div>
                     
                     <div class="form-group">
-                        <label for="main_image">Hoofdafbeelding:</label>
-                        <input type="url" id="main_image" name="main_image" value="{{ data.main_image }}">
+                        <label for="Hoofdafbeelding">Hoofdafbeelding:</label>
+                        <input type="url" id="Hoofdafbeelding" name="Hoofdafbeelding" value="{{ data.main_image }}">
                         {% if data.main_image %}
                             <img src="{{ data.main_image }}" alt="Hoofdafbeelding" class="image-preview">
                         {% endif %}
                     </div>
                     
                     <div class="form-group">
-                        <label for="all_images">Alle afbeeldingen:</label>
-                        <textarea id="all_images" name="all_images" rows="4">{{ data.all_images }}</textarea>
+                        <label for="Additionele afbeeldingen">Additionele afbeeldingen:</label>
+                        <textarea id="Additionele afbeeldingen" name="Additionele afbeeldingen" rows="4">{{ data.all_images }}</textarea>
                         <div class="field-info">Gescheiden door |</div>
+                    </div>
+                    
+                    <!-- Nieuwe velden -->
+                    <div class="form-group">
+                        <label for="Conditie">Conditie:</label>
+                        <select id="Conditie" name="Conditie">
+                            <option value="Nieuw" {{ 'selected' if data.condition == 'Nieuw' or not data.condition }}>Nieuw</option>
+                            <option value="Tweedehands" {{ 'selected' if data.condition == 'Tweedehands' }}>Tweedehands</option>
+                            <option value="Refurbished" {{ 'selected' if data.condition == 'Refurbished' }}>Refurbished</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="Conditie commentaar">Conditie commentaar:</label>
+                        <input type="text" id="Conditie commentaar" name="Conditie commentaar" 
+                               value="{{ data.condition_comment }}" maxlength="200">
+                        <div class="field-info">Optionele extra informatie over conditie</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="Interne referentie">Interne referentie:</label>
+                        <input type="text" id="Interne referentie" name="Interne referentie" 
+                               value="{{ data.internal_reference }}" maxlength="100">
+                        <div class="field-info">Maximaal 100 karakters</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="Voorraad">Voorraad:</label>
+                        <input type="number" id="Voorraad" name="Voorraad" 
+                               value="{{ data.stock if data.stock is not none else 69 }}" min="0">
+                        <div class="field-info">Alleen getallen</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="Levertijd">Levertijd:</label>
+                        <select id="Levertijd" name="Levertijd">
+                            <option value="">Selecteer levertijd</option>
+                            <option value="1-2 werkdagen" {{ 'selected' if data.delivery_time == '1-2 werkdagen' }}>1-2 werkdagen</option>
+                            <option value="3-5 werkdagen" {{ 'selected' if data.delivery_time == '3-5 werkdagen' }}>3-5 werkdagen</option>
+                            <option value="4-8 werkdagen" {{ 'selected' if data.delivery_time == '4-8 werkdagen' }}>4-8 werkdagen</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="Afleverwijze">Afleverwijze:</label>
+                        <select id="Afleverwijze" name="Afleverwijze">
+                            <option value="">Selecteer afleverwijze</option>
+                            <option value="Thuisbezorgd" {{ 'selected' if data.delivery_method == 'Thuisbezorgd' }}>Thuisbezorgd</option>
+                            <option value="Afhaalpunt" {{ 'selected' if data.delivery_method == 'Afhaalpunt' }}>Afhaalpunt</option>
+                            <option value="Winkel" {{ 'selected' if data.delivery_method == 'Winkel' }}>Winkel</option>
+                            <option value="Pakketautomaat" {{ 'selected' if data.delivery_method == 'Pakketautomaat' }}>Pakketautomaat</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="Te koop">Te koop:</label>
+                        <select id="Te koop" name="Te koop">
+                            <option value="Ja" {{ 'selected' if data.for_sale == 'Ja' or not data.for_sale }}>Ja</option>
+                            <option value="Nee" {{ 'selected' if data.for_sale == 'Nee' }}>Nee</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="Marktdeelnemer">Marktdeelnemer:</label>
+                        <input type="text" id="Marktdeelnemer" name="Marktdeelnemer" 
+                               value="{{ data.marketplace_participant }}" maxlength="100">
+                        <div class="field-info">Naam van verkoper/leverancier</div>
                     </div>
                 </div>
                 

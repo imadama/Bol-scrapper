@@ -193,36 +193,48 @@
                     </td>
                 </tr>
                 <tr>
-                    <th>Titel:</th>
+                    <th>Productnaam:</th>
                     <td>{{ data.title or '<span class="empty-value">Niet gevonden</span>'|safe }}</td>
                 </tr>
                 <tr>
-                    <th>Merk:</th>
-                    <td>{{ data.brand or '<span class="empty-value">Niet gevonden</span>'|safe }}</td>
+                    <th>Beschrijving:</th>
+                    <td class="description-cell">{{ data.description or '<span class="empty-value">Niet gevonden</span>'|safe }}</td>
                 </tr>
                 <tr>
-                    <th>Prijs (tekst):</th>
-                    <td>{{ data.price_text or '<span class="empty-value">Niet gevonden</span>'|safe }}</td>
-                </tr>
-                <tr>
-                    <th>Prijs (waarde):</th>
-                    <td>{{ data.price_value or '<span class="empty-value">Niet gevonden</span>'|safe }}</td>
-                </tr>
-                <tr>
-                    <th>Adviesprijs (tekst):</th>
-                    <td>{{ data.list_price_text or '<span class="empty-value">Niet gevonden</span>'|safe }}</td>
-                </tr>
-                <tr>
-                    <th>Adviesprijs (waarde):</th>
-                    <td>{{ data.list_price_value or '<span class="empty-value">Niet gevonden</span>'|safe }}</td>
+                    <th>Interne referentie:</th>
+                    <td>{{ data.internal_reference or '<span class="empty-value">Niet ingesteld</span>'|safe }}</td>
                 </tr>
                 <tr>
                     <th>EAN:</th>
                     <td>{{ data.ean or '<span class="empty-value">Niet gevonden</span>'|safe }}</td>
                 </tr>
                 <tr>
-                    <th>Beschrijving:</th>
-                    <td class="description-cell">{{ data.description or '<span class="empty-value">Niet gevonden</span>'|safe }}</td>
+                    <th>Conditie:</th>
+                    <td>{{ data.condition or '<span class="empty-value">Niet ingesteld</span>'|safe }}</td>
+                </tr>
+                <tr>
+                    <th>Conditie commentaar:</th>
+                    <td>{{ data.condition_comment or '<span class="empty-value">Niet ingesteld</span>'|safe }}</td>
+                </tr>
+                <tr>
+                    <th>Voorraad:</th>
+                    <td>{{ data.stock or '<span class="empty-value">Niet ingesteld</span>'|safe }}</td>
+                </tr>
+                <tr>
+                    <th>Prijs:</th>
+                    <td>{{ data.list_price_value or '<span class="empty-value">Niet gevonden</span>'|safe }}</td>
+                </tr>
+                <tr>
+                    <th>Levertijd:</th>
+                    <td>{{ data.delivery_time or '<span class="empty-value">Niet ingesteld</span>'|safe }}</td>
+                </tr>
+                <tr>
+                    <th>Afleverwijze:</th>
+                    <td>{{ data.delivery_method or '<span class="empty-value">Niet ingesteld</span>'|safe }}</td>
+                </tr>
+                <tr>
+                    <th>Te koop:</th>
+                    <td>{{ data.for_sale or '<span class="empty-value">Niet ingesteld</span>'|safe }}</td>
                 </tr>
                 <tr>
                     <th>Hoofdafbeelding:</th>
@@ -235,7 +247,11 @@
                     </td>
                 </tr>
                 <tr>
-                    <th>Alle afbeeldingen:</th>
+                    <th>Marktdeelnemer:</th>
+                    <td>{{ data.marketplace_participant or '<span class="empty-value">Niet ingesteld</span>'|safe }}</td>
+                </tr>
+                <tr>
+                    <th>Additionele afbeeldingen:</th>
                     <td>
                         {% if data.all_images %}
                             {{ data.all_images.split('|')|length }} afbeelding(en) gevonden
