@@ -20,21 +20,24 @@ app.secret_key = os.getenv('FLASK_SECRET_KEY', 'dev-secret-key')
 
 # Configuratie
 HEADLESS = os.getenv('HEADLESS', 'true').lower() == 'true'
-OUTPUT_EXCEL = os.getenv('OUTPUT_EXCEL', 'scraped_products.xlsx')
+OUTPUT_EXCEL = os.getenv('OUTPUT_EXCEL', 'Export_generic_template_20251004_07 PM052.xlsx')
 
-# Excel kolomvolgorde (exact zoals gespecificeerd)
+# Excel kolomvolgorde (exact zoals gespecificeerd in template)
 EXCEL_COLUMNS = [
-    'source_url',
-    'title', 
-    'brand',
-    'price_text',
-    'price_value',
-    'list_price_text',
-    'list_price_value',
-    'ean',
-    'description',
-    'main_image',
-    'all_images'
+    'Productnaam',           # title
+    'Beschrijving',          # description
+    'Interne referentie',    # internal_reference
+    'EAN',                   # ean
+    'Conditie',              # condition
+    'Conditie commentaar',   # condition_comment
+    'Voorraad',              # stock
+    'Prijs',                 # list_price_value
+    'Levertijd',             # delivery_time
+    'Afleverwijze',          # delivery_method
+    'Te koop',               # for_sale
+    'Hoofdafbeelding',       # main_image
+    'Marktdeelnemer',        # marketplace_participant
+    'Additionele afbeeldingen' # all_images
 ]
 
 
@@ -49,18 +52,44 @@ def validate_bol_url(url: str) -> bool:
 
 def ensure_excel_exists() -> None:
     """Zorg dat Excel bestand bestaat met juiste kolommen."""
-    if not os.path.exists(OUTPUT_EXCEL):
-        # Maak lege DataFrame met juiste kolommen
-        df = pd.DataFrame(columns=EXCEL_COLUMNS)
-        df.to_excel(OUTPUT_EXCEL, index=False)
+    # Gebruik altijd het template bestand
+    template_file = 'Export_generic_template_20251004_07 PM052.xlsx'
+    if os.path.exists(template_file):
+        # Kopieer template naar output bestand als het nog niet bestaat
+        if not os.path.exists(OUTPUT_EXCEL):
+            import shutil
+            shutil.copy2(template_file, OUTPUT_EXCEL)
+
+
+def map_data_to_excel_columns(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Map onze data naar Excel kolom namen."""
+    return {
+        'Productnaam': data.get('title', ''),
+        'Beschrijving': data.get('description', ''),
+        'Interne referentie': data.get('internal_reference', ''),
+        'EAN': data.get('ean', ''),
+        'Conditie': data.get('condition', ''),
+        'Conditie commentaar': data.get('condition_comment', ''),
+        'Voorraad': data.get('stock', 69),
+        'Prijs': data.get('list_price_value', None),
+        'Levertijd': data.get('delivery_time', ''),
+        'Afleverwijze': data.get('delivery_method', ''),
+        'Te koop': data.get('for_sale', 'Ja'),
+        'Hoofdafbeelding': data.get('main_image', ''),
+        'Marktdeelnemer': data.get('marketplace_participant', ''),
+        'Additionele afbeeldingen': data.get('all_images', '')
+    }
 
 
 def append_to_excel(data: Dict[str, Any]) -> None:
     """Append data naar Excel bestand."""
     ensure_excel_exists()
     
+    # Map data naar Excel kolommen
+    excel_data = map_data_to_excel_columns(data)
+    
     # Maak DataFrame van data
-    df_new = pd.DataFrame([data])
+    df_new = pd.DataFrame([excel_data])
     
     # Lees bestaande data
     df_existing = pd.read_excel(OUTPUT_EXCEL)
@@ -73,6 +102,10 @@ def append_to_excel(data: Dict[str, Any]) -> None:
 def get_excel_data() -> pd.DataFrame:
     """Lees alle data uit Excel bestand."""
     if not os.path.exists(OUTPUT_EXCEL):
+        # Gebruik template bestand als fallback
+        template_file = 'Export_generic_template_20251004_07 PM052.xlsx'
+        if os.path.exists(template_file):
+            return pd.read_excel(template_file)
         return pd.DataFrame(columns=EXCEL_COLUMNS)
     
     return pd.read_excel(OUTPUT_EXCEL)
@@ -101,6 +134,16 @@ def scrape():
         # Scrape product
         product_data = scrape_bol_product(url, headless=HEADLESS)
         
+        # Voeg standaard waarden toe voor nieuwe velden
+        product_data['condition'] = 'Nieuw'
+        product_data['condition_comment'] = ''
+        product_data['internal_reference'] = ''
+        product_data['stock'] = 69
+        product_data['delivery_time'] = ''
+        product_data['delivery_method'] = ''
+        product_data['for_sale'] = 'Ja'
+        product_data['marketplace_participant'] = ''
+        
         # Zet in session
         session['current_row'] = product_data
         
@@ -122,18 +165,41 @@ def edit():
         # Update session data met formulier data
         current_data = session['current_row'].copy()
         
-        for field in EXCEL_COLUMNS:
-            if field in request.form:
-                value = request.form[field].strip()
+        # Map Excel kolommen naar onze interne veld namen
+        field_mapping = {
+            'Productnaam': 'title',
+            'Beschrijving': 'description', 
+            'Interne referentie': 'internal_reference',
+            'EAN': 'ean',
+            'Conditie': 'condition',
+            'Conditie commentaar': 'condition_comment',
+            'Voorraad': 'stock',
+            'Prijs': 'list_price_value',
+            'Levertijd': 'delivery_time',
+            'Afleverwijze': 'delivery_method',
+            'Te koop': 'for_sale',
+            'Hoofdafbeelding': 'main_image',
+            'Marktdeelnemer': 'marketplace_participant',
+            'Additionele afbeeldingen': 'all_images'
+        }
+        
+        for excel_field, internal_field in field_mapping.items():
+            if excel_field in request.form:
+                value = request.form[excel_field].strip()
                 
                 # Speciale behandeling voor numerieke velden
-                if field in ['price_value', 'list_price_value']:
+                if internal_field == 'list_price_value':
                     try:
-                        current_data[field] = float(value) if value else None
+                        current_data[internal_field] = float(value) if value else None
                     except ValueError:
-                        current_data[field] = None
+                        current_data[internal_field] = None
+                elif internal_field == 'stock':
+                    try:
+                        current_data[internal_field] = int(value) if value else 69
+                    except ValueError:
+                        current_data[internal_field] = 69
                 else:
-                    current_data[field] = value
+                    current_data[internal_field] = value
         
         session['current_row'] = current_data
         return redirect(url_for('confirm'))
@@ -183,7 +249,7 @@ def rows():
 def export():
     """Download Excel bestand."""
     try:
-        # Lees Excel data
+        # Lees Excel data met opgeslagen producten
         df = get_excel_data()
         
         # Maak in-memory stream
@@ -194,7 +260,7 @@ def export():
         return send_file(
             output,
             as_attachment=True,
-            download_name=OUTPUT_EXCEL,
+            download_name='Export_generic_template_20251004_07 PM052.xlsx',
             mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
     except Exception as e:
