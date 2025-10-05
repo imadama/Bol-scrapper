@@ -255,16 +255,16 @@
                         <div class="stat-label">Totaal Producten</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-number">{{ rows|selectattr('price_value')|list|length }}</div>
+                        <div class="stat-number">{{ rows|selectattr('Prijs')|list|length }}</div>
                         <div class="stat-label">Met Prijs</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-number">{{ rows|selectattr('brand')|list|length }}</div>
-                        <div class="stat-label">Met Merk</div>
+                        <div class="stat-number">{{ rows|selectattr('EAN')|list|length }}</div>
+                        <div class="stat-label">Met EAN</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-number">{{ rows|selectattr('ean')|list|length }}</div>
-                        <div class="stat-label">Met EAN</div>
+                        <div class="stat-number">{{ rows|selectattr('Conditie')|list|length }}</div>
+                        <div class="stat-label">Met Conditie</div>
                     </div>
                 </div>
                 
@@ -273,55 +273,65 @@
                         <thead>
                             <tr>
                                 <th>Afbeelding</th>
-                                <th>Titel</th>
-                                <th>Merk</th>
-                                <th>Prijs</th>
-                                <th>Adviesprijs</th>
+                                <th>Productnaam</th>
                                 <th>EAN</th>
-                                <th>Beschrijving</th>
-                                <th>Bron URL</th>
+                                <th>Prijs</th>
+                                <th>Conditie</th>
+                                <th>Voorraad</th>
+                                <th>Te koop</th>
+                                <th>Levertijd</th>
+                                <th>Acties</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for row in rows %}
                             <tr>
                                 <td class="image-cell">
-                                    {% if row.main_image %}
-                                        <img src="{{ row.main_image }}" alt="Product afbeelding">
+                                    {% if row.Hoofdafbeelding %}
+                                        <img src="{{ row.Hoofdafbeelding }}" alt="Product afbeelding">
                                     {% else %}
                                         <span style="color: #95a5a6;">-</span>
                                     {% endif %}
                                 </td>
                                 <td class="title-cell">
-                                    {{ row.title or '-' }}
+                                    {{ row.Productnaam or '-' }}
                                 </td>
                                 <td>
-                                    {{ row.brand or '-' }}
+                                    {{ row.EAN or '-' }}
                                 </td>
                                 <td class="price-cell">
-                                    {% if row.price_value %}
-                                        €{{ "%.2f"|format(row.price_value) }}
+                                    {% if row.Prijs %}
+                                        €{{ "%.2f"|format(row.Prijs) }}
                                     {% else %}
-                                        {{ row.price_text or '-' }}
+                                        -
                                     {% endif %}
                                 </td>
                                 <td>
-                                    {% if row.list_price_value %}
-                                        €{{ "%.2f"|format(row.list_price_value) }}
-                                    {% else %}
-                                        {{ row.list_price_text or '-' }}
-                                    {% endif %}
+                                    {{ row.Conditie or '-' }}
                                 </td>
                                 <td>
-                                    {{ row.ean or '-' }}
+                                    {{ row.Voorraad or '-' }}
                                 </td>
-                                <td class="description-cell">
-                                    {{ row.description or '-' }}
+                                <td>
+                                    {{ row['Te koop'] or '-' }}
                                 </td>
-                                <td class="url-cell">
-                                    <a href="{{ row.source_url }}" target="_blank">
-                                        {{ row.source_url[:30] }}...
-                                    </a>
+                                <td>
+                                    {{ row.Levertijd or '-' }}
+                                </td>
+                                <td>
+                                    <div style="display: flex; gap: 5px;">
+                                        <form method="POST" action="{{ url_for('edit_row', row_id=loop.index0) }}" style="display: inline;">
+                                            <button type="submit" class="btn btn-primary" style="padding: 5px 10px; font-size: 12px;">
+                                                ✏️
+                                            </button>
+                                        </form>
+                                        <form method="POST" action="{{ url_for('delete_row', row_id=loop.index0) }}" style="display: inline;" 
+                                              onsubmit="return confirm('Weet je zeker dat je dit product wilt verwijderen?')">
+                                            <button type="submit" class="btn btn-danger" style="padding: 5px 10px; font-size: 12px; background: #e74c3c;">
+                                                🗑️
+                                            </button>
+                                        </form>
+                                    </div>
                                 </td>
                             </tr>
                             {% endfor %}

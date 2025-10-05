@@ -24,7 +24,30 @@ De scraper extraheert de volgende productinformatie:
 
 ## 🚀 Quickstart
 
-### 1. Installatie
+### 🐳 Docker (Aanbevolen)
+
+**Eenvoudigste manier om te starten:**
+
+```bash
+# Clone repository
+git clone <repository-url>
+cd Bol-scrapper
+
+# Start met Docker
+make setup
+# Of handmatig:
+docker compose up --build
+
+# Applicatie beschikbaar op: http://localhost:5000
+```
+
+**Voor productie met Nginx:**
+```bash
+make prod
+# Applicatie beschikbaar op: http://localhost:80
+```
+
+### 💻 Lokale Development
 
 ```bash
 # Clone repository
@@ -42,23 +65,20 @@ pip install -r requirements.txt
 
 # Installeer Playwright browsers
 python -m playwright install
+
+# Start applicatie
+cd bol_scraper
+python app.py
 ```
 
-### 2. Configuratie
+### ⚙️ Configuratie
 
 ```bash
 # Kopieer environment template
-cp .env.example .env
+cp env.template .env
 
-# Bewerk .env bestand (optioneel)
+# Bewerk .env bestand
 nano .env
-```
-
-### 3. Starten
-
-```bash
-cd bol_scraper
-python app.py
 ```
 
 De app is nu beschikbaar op: http://127.0.0.1:5000
@@ -71,12 +91,28 @@ De app is nu beschikbaar op: http://127.0.0.1:5000
 # Verplicht
 FLASK_SECRET_KEY=changeme                    # Flask secret key
 HEADLESS=true                               # Browser headless mode
-OUTPUT_EXCEL=scraped_products.xlsx         # Excel bestandsnaam
+OUTPUT_EXCEL=Export_generic_template_20251004_07 PM052.xlsx
+
+# Cloudinary (voor publieke afbeeldingen)
+CLOUDINARY_CLOUD_NAME=your_cloud_name       # Cloudinary cloud name
+CLOUDINARY_API_KEY=your_api_key            # Cloudinary API key
+CLOUDINARY_API_SECRET=your_api_secret      # Cloudinary API secret
 
 # Optioneel
 HTTP_PROXY=http://user:pass@host:port      # HTTP proxy
 HTTPS_PROXY=http://user:pass@host:port     # HTTPS proxy
 ```
+
+### Lokale Afbeelding Hosting
+
+De applicatie download afbeeldingen lokaal en serveert ze via de Flask server:
+
+1. **Lokale opslag**: Afbeeldingen worden opgeslagen in `static/images/products/`
+2. **Flask server**: Serveert afbeeldingen via `/images/products/<filename>`
+3. **Docker ready**: Alle afbeeldingen zijn lokaal beschikbaar
+4. **Bol.com compatibel**: URLs eindigen op `.jpg` en zijn direct toegankelijk
+
+Voor productie gebruik, stel `IMAGE_BASE_URL` in naar je publieke domein.
 
 ### Excel Kolomvolgorde
 
@@ -239,11 +275,54 @@ python -m playwright install chromium
 FLASK_DEBUG=1 python app.py
 ```
 
+## 🐳 Docker Commands
+
+```bash
+# Development
+make dev      # Start development environment
+make build    # Build Docker image
+make up       # Start containers
+make down     # Stop containers
+make logs     # Show logs
+
+# Production
+make prod     # Start production environment (with Nginx)
+
+# Maintenance
+make clean    # Clean up containers and images
+make backup   # Backup data
+make restore  # Restore data from backup
+
+# Utilities
+make shell    # Open shell in container
+make test     # Test application
+make setup    # Complete setup (build + up + playwright)
+```
+
+**Zie `DOCKER.md` voor uitgebreide Docker documentatie.**
+
+### 🚀 Docker Deployment
+
+```bash
+# Eerste keer setup
+cp env.template .env
+make setup
+
+# Dagelijks gebruik
+make up    # Start applicatie
+make down  # Stop applicatie
+make logs  # Bekijk logs
+
+# Voor productie
+make prod  # Start met Nginx reverse proxy
+```
+
 ## 📈 Performance
 
 - **Scrape Tijd**: 2-5 seconden per product (normale verbinding)
 - **Memory**: ~50MB per browser instance
 - **Concurrent**: Niet aanbevolen (rate limiting)
+- **Docker**: ~200MB container size, ~50MB runtime memory
 
 ## 🤝 Contributing
 

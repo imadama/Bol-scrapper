@@ -1,0 +1,52 @@
+services:
+  bol-scraper:
+    build: .
+    container_name: bol-scraper
+    ports:
+      - "5000:5000"
+    environment:
+      # Flask configuratie
+      - FLASK_ENV=production
+      - FLASK_SECRET_KEY=${FLASK_SECRET_KEY:-your-secret-key-change-me}
+      - HEADLESS=true
+      
+      # Afbeelding hosting
+      - IMAGE_BASE_URL=${IMAGE_BASE_URL:-http://localhost:5000}
+      
+      # Excel configuratie
+      - OUTPUT_EXCEL=Export_generic_template_20251004_07 PM052.xlsx
+      
+      # Optioneel: Proxy configuratie
+      # - HTTP_PROXY=${HTTP_PROXY}
+      # - HTTPS_PROXY=${HTTPS_PROXY}
+    
+    volumes:
+      # Persistente opslag voor afbeeldingen en Excel bestanden
+      - ./data:/app/data
+      - ./static:/app/static
+      - ./bol_scraper:/app/bol_scraper
+    
+    restart: unless-stopped
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Optioneel: Nginx reverse proxy voor productie
+  nginx:
+    image: nginx:alpine
+    container_name: bol-scraper-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - bol-scraper
+    restart: unless-stopped
+    profiles:
+      - production
