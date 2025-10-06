@@ -195,9 +195,11 @@
                     <div class="form-group">
                         <label for="Conditie">Conditie:</label>
                         <select id="Conditie" name="Conditie">
-                            <option value="Nieuw" {{ 'selected' if data.condition == 'Nieuw' or not data.condition }}>Nieuw</option>
-                            <option value="Tweedehands" {{ 'selected' if data.condition == 'Tweedehands' }}>Tweedehands</option>
-                            <option value="Refurbished" {{ 'selected' if data.condition == 'Refurbished' }}>Refurbished</option>
+                            <option value="nieuw" {{ 'selected' if data.condition == 'nieuw' or not data.condition }}>nieuw</option>
+                            <option value="als nieuw" {{ 'selected' if data.condition == 'als nieuw' }}>als nieuw</option>
+                            <option value="redelijk" {{ 'selected' if data.condition == 'redelijk' }}>redelijk</option>
+                            <option value="matig" {{ 'selected' if data.condition == 'matig' }}>matig</option>
+                            <option value="goed" {{ 'selected' if data.condition == 'goed' }}>goed</option>
                         </select>
                     </div>
                     
@@ -226,9 +228,12 @@
                         <label for="Levertijd">Levertijd:</label>
                         <select id="Levertijd" name="Levertijd">
                             <option value="">Selecteer levertijd</option>
-                            <option value="1-2 werkdagen" {{ 'selected' if data.delivery_time == '1-2 werkdagen' }}>1-2 werkdagen</option>
-                            <option value="3-5 werkdagen" {{ 'selected' if data.delivery_time == '3-5 werkdagen' }}>3-5 werkdagen</option>
-                            <option value="4-8 werkdagen" {{ 'selected' if data.delivery_time == '4-8 werkdagen' }}>4-8 werkdagen</option>
+                            <option value="VVB" {{ 'selected' if data.delivery_time == 'VVB' }}>VVB</option>
+                            <option value="1-2d" {{ 'selected' if data.delivery_time == '1-2d' }}>1-2d</option>
+                            <option value="2-3d" {{ 'selected' if data.delivery_time == '2-3d' }}>2-3d</option>
+                            <option value="4-8d" {{ 'selected' if data.delivery_time == '4-8d' }}>4-8d</option>
+                            <option value="3-5d" {{ 'selected' if data.delivery_time == '3-5d' }}>3-5d</option>
+                            <option value="1-8d" {{ 'selected' if data.delivery_time == '1-8d' }}>1-8d</option>
                         </select>
                     </div>
                     
@@ -236,18 +241,16 @@
                         <label for="Afleverwijze">Afleverwijze:</label>
                         <select id="Afleverwijze" name="Afleverwijze">
                             <option value="">Selecteer afleverwijze</option>
-                            <option value="Thuisbezorgd" {{ 'selected' if data.delivery_method == 'Thuisbezorgd' }}>Thuisbezorgd</option>
-                            <option value="Afhaalpunt" {{ 'selected' if data.delivery_method == 'Afhaalpunt' }}>Afhaalpunt</option>
-                            <option value="Winkel" {{ 'selected' if data.delivery_method == 'Winkel' }}>Winkel</option>
-                            <option value="Pakketautomaat" {{ 'selected' if data.delivery_method == 'Pakketautomaat' }}>Pakketautomaat</option>
+                            <option value="verkoper" {{ 'selected' if data.delivery_method == 'verkoper' }}>verkoper</option>
+                            <option value="Lbv" {{ 'selected' if data.delivery_method == 'Lbv' }}>Lbv</option>
                         </select>
                     </div>
                     
                     <div class="form-group">
                         <label for="Te koop">Te koop:</label>
                         <select id="Te koop" name="Te koop">
-                            <option value="Ja" {{ 'selected' if data.for_sale == 'Ja' or not data.for_sale }}>Ja</option>
-                            <option value="Nee" {{ 'selected' if data.for_sale == 'Nee' }}>Nee</option>
+                            <option value="ja" {{ 'selected' if data.for_sale == 'ja' or not data.for_sale }}>ja</option>
+                            <option value="nee" {{ 'selected' if data.for_sale == 'nee' }}>nee</option>
                         </select>
                     </div>
                     

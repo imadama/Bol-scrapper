@@ -74,7 +74,7 @@ def map_data_to_excel_columns(data: Dict[str, Any]) -> Dict[str, Any]:
         'Prijs': data.get('list_price_value', None),
         'Levertijd': data.get('delivery_time', ''),
         'Afleverwijze': data.get('delivery_method', ''),
-        'Te koop': data.get('for_sale', 'Ja'),
+        'Te koop': data.get('for_sale', 'ja'),
         'Hoofdafbeelding': data.get('main_image', ''),
         'Marktdeelnemer': data.get('marketplace_participant', ''),
         'Additionele afbeeldingen': data.get('all_images', '')
@@ -99,16 +99,47 @@ def append_to_excel(data: Dict[str, Any]) -> None:
     df_combined.to_excel(OUTPUT_EXCEL, index=False)
 
 
+def update_excel_row(row_index: int, data: Dict[str, Any]) -> None:
+    """Update een bestaande rij in Excel bestand."""
+    # Map data naar Excel kolommen
+    excel_data = map_data_to_excel_columns(data)
+    
+    # Lees bestaande data
+    df = pd.read_excel(OUTPUT_EXCEL)
+    
+    # Update de specifieke rij
+    for col, value in excel_data.items():
+        if col in df.columns:
+            df.at[row_index, col] = value
+    
+    # Schrijf terug
+    df.to_excel(OUTPUT_EXCEL, index=False)
+
+
 def get_excel_data() -> pd.DataFrame:
     """Lees alle data uit Excel bestand."""
     if not os.path.exists(OUTPUT_EXCEL):
-        # Gebruik template bestand als fallback
-        template_file = 'Export_generic_template_20251004_07 PM052.xlsx'
-        if os.path.exists(template_file):
-            return pd.read_excel(template_file)
         return pd.DataFrame(columns=EXCEL_COLUMNS)
     
-    return pd.read_excel(OUTPUT_EXCEL)
+    df = pd.read_excel(OUTPUT_EXCEL)
+    
+    # Filter alleen de gewenste kolommen en verwijder oude kolommen
+    if all(col in df.columns for col in EXCEL_COLUMNS):
+        df = df[EXCEL_COLUMNS]
+    else:
+        # Maak nieuwe DataFrame met alleen gewenste kolommen
+        df_clean = pd.DataFrame(columns=EXCEL_COLUMNS)
+        for col in EXCEL_COLUMNS:
+            if col in df.columns:
+                df_clean[col] = df[col]
+            else:
+                df_clean[col] = ''
+        df = df_clean
+    
+    # Vervang NaN waarden met lege strings
+    df = df.fillna('')
+    
+    return df
 
 
 @app.route('/')
@@ -135,13 +166,13 @@ def scrape():
         product_data = scrape_bol_product(url, headless=HEADLESS)
         
         # Voeg standaard waarden toe voor nieuwe velden
-        product_data['condition'] = 'Nieuw'
+        product_data['condition'] = 'nieuw'
         product_data['condition_comment'] = ''
         product_data['internal_reference'] = ''
         product_data['stock'] = 69
         product_data['delivery_time'] = ''
         product_data['delivery_method'] = ''
-        product_data['for_sale'] = 'Ja'
+        product_data['for_sale'] = 'ja'
         product_data['marketplace_participant'] = ''
         
         # Zet in session
@@ -218,13 +249,22 @@ def confirm():
     if request.method == 'POST':
         # Sla op in Excel
         try:
-            append_to_excel(session['current_row'])
-            flash('Product opgeslagen in Excel!', 'success')
+            # Check of we een bestaande rij bewerken
+            if 'editing_row_index' in session:
+                # Update bestaande rij
+                update_excel_row(session['editing_row_index'], session['current_row'])
+                flash('Product bijgewerkt!', 'success')
+                session.pop('editing_row_index', None)
+                return redirect(url_for('rows'))
+            else:
+                # Nieuwe rij toevoegen
+                append_to_excel(session['current_row'])
+                flash('Product opgeslagen in Excel!', 'success')
+                return redirect(url_for('index'))
             
             # Clear session
             session.pop('current_row', None)
             
-            return redirect(url_for('index'))
         except Exception as e:
             flash(f'Opslaan fout: {str(e)}', 'error')
     
@@ -237,24 +277,139 @@ def rows():
     """Overzicht van alle opgeslagen rijen."""
     try:
         df = get_excel_data()
+        
+        # Filter lege rijen (alleen rijen met echte data)
+        df = df.dropna(how='all')
+        
         # Converteer naar dict lijst voor template
         rows_data = df.to_dict('records')
+        
+        # Zorg dat elke rij alle verwachte velden heeft en geen NaN waarden
+        for row in rows_data:
+            for col in EXCEL_COLUMNS:
+                if col not in row or pd.isna(row[col]):
+                    row[col] = ''
+                # Speciale behandeling voor prijs velden
+                elif col == 'Prijs':
+                    if pd.isna(row[col]) or row[col] == '':
+                        row[col] = ''
+                    elif isinstance(row[col], (int, float)):
+                        row[col] = float(row[col])  # Behoud als float voor formatting
+                    else:
+                        try:
+                            row[col] = float(str(row[col]).replace(',', '.'))
+                        except (ValueError, TypeError):
+                            row[col] = ''
+                # Converteer andere velden naar string om slicing problemen te voorkomen
+                elif isinstance(row[col], (int, float)) and not isinstance(row[col], bool):
+                    if pd.isna(row[col]):
+                        row[col] = ''
+                    else:
+                        row[col] = str(row[col])
+        
+        # Debug info
+        print(f"DEBUG: Aantal rijen gevonden: {len(rows_data)}")
+        if len(rows_data) > 0:
+            print(f"DEBUG: Eerste rij: {rows_data[0]}")
+        
         return render_template('rows.html', rows=rows_data)
     except Exception as e:
+        print(f"DEBUG: Fout in rows functie: {str(e)}")
         flash(f'Fout bij laden data: {str(e)}', 'error')
         return redirect(url_for('index'))
+
+
+@app.route('/edit_row/<int:row_index>')
+def edit_row(row_index):
+    """Bewerk een bestaande rij."""
+    try:
+        df = get_excel_data()
+        
+        if row_index >= len(df):
+            flash('Rij niet gevonden', 'error')
+            return redirect(url_for('rows'))
+        
+        # Haal de rij data op
+        row_data = df.iloc[row_index].to_dict()
+        
+        # Converteer naar interne format
+        internal_data = {
+            'title': row_data.get('Productnaam', ''),
+            'description': row_data.get('Beschrijving', ''),
+            'internal_reference': row_data.get('Interne referentie', ''),
+            'ean': row_data.get('EAN', ''),
+            'condition': row_data.get('Conditie', ''),
+            'condition_comment': row_data.get('Conditie commentaar', ''),
+            'stock': row_data.get('Voorraad', 69),
+            'list_price_value': row_data.get('Prijs', None),
+            'delivery_time': row_data.get('Levertijd', ''),
+            'delivery_method': row_data.get('Afleverwijze', ''),
+            'for_sale': row_data.get('Te koop', 'ja'),
+            'main_image': row_data.get('Hoofdafbeelding', ''),
+            'marketplace_participant': row_data.get('Marktdeelnemer', ''),
+            'all_images': row_data.get('Additionele afbeeldingen', '')
+        }
+        
+        # Zet in session met row index voor update
+        session['current_row'] = internal_data
+        session['editing_row_index'] = row_index
+        
+        return redirect(url_for('edit'))
+        
+    except Exception as e:
+        flash(f'Fout bij laden rij: {str(e)}', 'error')
+        return redirect(url_for('rows'))
+
+
+@app.route('/delete_row/<int:row_index>')
+def delete_row(row_index):
+    """Verwijder een rij."""
+    try:
+        df = get_excel_data()
+        
+        if row_index >= len(df):
+            flash('Rij niet gevonden', 'error')
+            return redirect(url_for('rows'))
+        
+        # Verwijder de rij
+        df = df.drop(df.index[row_index])
+        
+        # Schrijf terug naar Excel
+        df.to_excel(OUTPUT_EXCEL, index=False)
+        
+        flash('Product verwijderd!', 'success')
+        return redirect(url_for('rows'))
+        
+    except Exception as e:
+        flash(f'Fout bij verwijderen: {str(e)}', 'error')
+        return redirect(url_for('rows'))
 
 
 @app.route('/export')
 def export():
     """Download Excel bestand."""
     try:
-        # Lees Excel data met opgeslagen producten
-        df = get_excel_data()
+        # Lees alleen het output bestand, niet het template
+        if os.path.exists(OUTPUT_EXCEL):
+            df = pd.read_excel(OUTPUT_EXCEL)
+        else:
+            # Maak lege DataFrame met juiste kolommen
+            df = pd.DataFrame(columns=EXCEL_COLUMNS)
+        
+        # Filter alleen de gewenste kolommen en verwijder oude kolommen
+        df_clean = df[EXCEL_COLUMNS] if all(col in df.columns for col in EXCEL_COLUMNS) else pd.DataFrame(columns=EXCEL_COLUMNS)
+        
+        # Zorg dat alle verwachte kolommen bestaan
+        for col in EXCEL_COLUMNS:
+            if col not in df_clean.columns:
+                df_clean[col] = ''
+        
+        # Vervang NaN waarden met lege strings
+        df_clean = df_clean.fillna('')
         
         # Maak in-memory stream
         output = io.BytesIO()
-        df.to_excel(output, index=False, engine='openpyxl')
+        df_clean.to_excel(output, index=False, engine='openpyxl')
         output.seek(0)
         
         return send_file(

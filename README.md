@@ -1,4 +1,4 @@
-# 🛒 Bol.com Scraper
+sou# 🛒 Bol.com Scraper
 
 Een productie-klare mini-app waarmee je bol.com productpagina's kunt scrapen, data kunt bewerken in een UI en kunt exporteren naar Excel.
 
