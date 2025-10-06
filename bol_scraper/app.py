@@ -3,14 +3,11 @@ Flask app voor Bol.com scraper
 """
 import os
 import io
-import uuid
-import requests
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional
 from urllib.parse import urlparse
-from urllib.request import urlretrieve
 
 import pandas as pd
-from flask import Flask, render_template, request, redirect, url_for, flash, session, send_file, send_from_directory, Response
+from flask import Flask, render_template, request, redirect, url_for, flash, session, send_file
 from dotenv import load_dotenv
 
 from scraper.bol import scrape_bol_product
@@ -18,15 +15,12 @@ from scraper.bol import scrape_bol_product
 # Load environment variables
 load_dotenv()
 
-app = Flask(__name__, static_folder='static', static_url_path='/static')
+app = Flask(__name__)
 app.secret_key = os.getenv('FLASK_SECRET_KEY', 'dev-secret-key')
 
 # Configuratie
 HEADLESS = os.getenv('HEADLESS', 'true').lower() == 'true'
-OUTPUT_EXCEL = os.getenv('OUTPUT_EXCEL', 'Export_generic_template_20251004_07 PM052.xlsx')
-
-# Lokale afbeelding configuratie
-IMAGE_BASE_URL = os.getenv('IMAGE_BASE_URL', 'http://localhost:5000')
+OUTPUT_EXCEL = os.getenv('OUTPUT_EXCEL', 'scraped_products.xlsx')
 
 # Excel kolomvolgorde (exact zoals gespecificeerd in template)
 EXCEL_COLUMNS = [
@@ -56,151 +50,6 @@ def validate_bol_url(url: str) -> bool:
         return False
 
 
-def validate_image_url_for_bol(image_url: str) -> bool:
-    """Valideer of afbeelding URL voldoet aan bol.com vereisten."""
-    if not image_url:
-        return False
-    
-    try:
-        # Controleer of URL eindigt op toegestane extensies
-        valid_extensions = ['.jpg', '.jpeg', '.png']
-        if not any(image_url.lower().endswith(ext) for ext in valid_extensions):
-            return False
-        
-        # Controleer op spaties in URL
-        if ' ' in image_url:
-            return False
-        
-        # Controleer of het een geldige URL is
-        parsed = urlparse(image_url)
-        if not parsed.netloc or not parsed.scheme.startswith('http'):
-            return False
-        
-        # Controleer of het geen verkorte URL is (geen bit.ly, tinyurl, etc.)
-        shorteners = ['bit.ly', 'tinyurl.com', 'short.link', 't.co']
-        if any(shortener in parsed.netloc.lower() for shortener in shorteners):
-            return False
-        
-        # Controleer of het geen Dropbox URL is
-        if 'dropbox.com' in parsed.netloc.lower():
-            return False
-        
-        # Controleer of het geen kleine afbeelding is (thumbnails)
-        small_image_indicators = ['thumb', 'small', 'mini', 'icon']
-        if any(indicator in image_url.lower() for indicator in small_image_indicators):
-            return False
-        
-        return True
-        
-    except Exception:
-        return False
-
-
-def get_image_dimensions(image_url: str) -> tuple:
-    """Haal afbeelding dimensies op om te controleren of deze groot genoeg zijn."""
-    try:
-        response = requests.head(image_url, timeout=10)
-        if response.status_code == 200:
-            # Probeer dimensies uit headers te halen
-            content_length = response.headers.get('content-length')
-            if content_length:
-                size_bytes = int(content_length)
-                # Als afbeelding kleiner is dan 50KB, is het waarschijnlijk te klein
-                if size_bytes < 50000:
-                    return (0, 0)  # Te klein
-            return (1200, 1200)  # Aanname dat het groot genoeg is
-    except Exception:
-        pass
-    return (0, 0)
-
-
-def download_and_save_image(image_url: str, product_id: str, image_index: int = 0) -> Optional[str]:
-    """Download een afbeelding en sla lokaal op, retourneer de lokale URL."""
-    try:
-        if not image_url or not image_url.startswith('http'):
-            return None
-        
-        # Maak unieke bestandsnaam
-        file_extension = '.jpg'  # Forceer JPG voor bol.com compatibiliteit
-        filename = f"{product_id}_{image_index}{file_extension}"
-        filepath = os.path.join('static', 'images', 'products', filename)
-        
-        # Maak directory aan als het niet bestaat
-        os.makedirs(os.path.dirname(filepath), exist_ok=True)
-        
-        # Download de afbeelding
-        response = requests.get(image_url, timeout=30, stream=True)
-        response.raise_for_status()
-        
-        # Controleer content type
-        content_type = response.headers.get('content-type', '')
-        if not content_type.startswith('image/'):
-            print(f"URL is geen afbeelding: {image_url}")
-            return None
-        
-        # Sla op als JPG
-        with open(filepath, 'wb') as f:
-            for chunk in response.iter_content(chunk_size=8192):
-                f.write(chunk)
-        
-        # Controleer of bestand groot genoeg is (minimaal 50KB)
-        file_size = os.path.getsize(filepath)
-        if file_size < 50000:
-            print(f"Afbeelding te klein ({file_size} bytes): {image_url}")
-            os.remove(filepath)  # Verwijder te kleine afbeelding
-            return None
-        
-        # Retourneer de absolute URL die bol.com kan bereiken
-        absolute_url = f"{IMAGE_BASE_URL}/images/products/{filename}"
-        print(f"Afbeelding opgeslagen: {absolute_url} ({file_size} bytes)")
-        return absolute_url
-        
-    except Exception as e:
-        print(f"Fout bij downloaden van afbeelding {image_url}: {e}")
-        return None
-
-
-def download_product_images(product_data: Dict[str, Any]) -> Dict[str, Any]:
-    """Download alle afbeeldingen van een product en sla lokaal op."""
-    try:
-        # Genereer unieke ID voor dit product
-        product_id = str(uuid.uuid4())[:8]
-        
-        # Download hoofdafbeelding
-        main_image_url = None
-        if product_data.get('main_image'):
-            local_url = download_and_save_image(product_data['main_image'], product_id, 0)
-            if local_url:
-                main_image_url = local_url
-            elif validate_image_url_for_bol(product_data['main_image']):
-                # Gebruik originele URL als download mislukt maar URL wel geldig is
-                main_image_url = product_data['main_image']
-        
-        # Download additionele afbeeldingen
-        all_images_urls = []
-        if product_data.get('all_images'):
-            image_urls = product_data['all_images'].split('|')
-            for i, img_url in enumerate(image_urls[:10]):  # Max 10 afbeeldingen
-                if img_url.strip():
-                    local_url = download_and_save_image(img_url.strip(), product_id, i + 1)
-                    if local_url:
-                        all_images_urls.append(local_url)
-                    elif validate_image_url_for_bol(img_url.strip()):
-                        # Gebruik originele URL als download mislukt maar URL wel geldig is
-                        all_images_urls.append(img_url.strip())
-        
-        # Update product data met URLs
-        updated_data = product_data.copy()
-        updated_data['main_image'] = main_image_url or ''
-        updated_data['all_images'] = '|'.join(all_images_urls)
-        
-        return updated_data
-        
-    except Exception as e:
-        print(f"Fout bij downloaden van afbeeldingen: {e}")
-        return product_data  # Retourneer originele data bij fout
-
-
 def ensure_excel_exists() -> None:
     """Zorg dat Excel bestand bestaat met juiste kolommen."""
     # Gebruik altijd het template bestand
@@ -210,6 +59,10 @@ def ensure_excel_exists() -> None:
         if not os.path.exists(OUTPUT_EXCEL):
             import shutil
             shutil.copy2(template_file, OUTPUT_EXCEL)
+    elif not os.path.exists(OUTPUT_EXCEL):
+        # Als template niet bestaat, maak leeg Excel bestand met juiste kolommen
+        df_empty = pd.DataFrame(columns=EXCEL_COLUMNS)
+        df_empty.to_excel(OUTPUT_EXCEL, index=False)
 
 
 def map_data_to_excel_columns(data: Dict[str, Any]) -> Dict[str, Any]:
@@ -225,7 +78,7 @@ def map_data_to_excel_columns(data: Dict[str, Any]) -> Dict[str, Any]:
         'Prijs': data.get('list_price_value', None),
         'Levertijd': data.get('delivery_time', ''),
         'Afleverwijze': data.get('delivery_method', ''),
-        'Te koop': data.get('for_sale', 'ja'),
+        'Te koop': data.get('for_sale', 'Ja'),
         'Hoofdafbeelding': data.get('main_image', ''),
         'Marktdeelnemer': data.get('marketplace_participant', ''),
         'Additionele afbeeldingen': data.get('all_images', '')
@@ -285,9 +138,6 @@ def scrape():
         # Scrape product
         product_data = scrape_bol_product(url, headless=HEADLESS)
         
-        # Download afbeeldingen lokaal en vervang URLs met lokale URLs
-        product_data = download_product_images(product_data)
-        
         # Voeg standaard waarden toe voor nieuwe velden
         product_data['condition'] = 'Nieuw'
         product_data['condition_comment'] = ''
@@ -295,7 +145,7 @@ def scrape():
         product_data['stock'] = 69
         product_data['delivery_time'] = ''
         product_data['delivery_method'] = ''
-        product_data['for_sale'] = 'ja'
+        product_data['for_sale'] = 'Ja'
         product_data['marketplace_participant'] = ''
         
         # Zet in session
@@ -437,27 +287,12 @@ def export():
         return send_file(
             output,
             as_attachment=True,
-            download_name='Export_generic_template_20251004_07 PM052.xlsx',
+            download_name='scraped_products.xlsx',
             mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
     except Exception as e:
         flash(f'Export fout: {str(e)}', 'error')
         return redirect(url_for('index'))
-
-
-@app.route('/images/products/<filename>')
-def serve_product_image(filename):
-    """Serveer product afbeeldingen met juiste headers voor bol.com."""
-    try:
-        return send_from_directory(
-            'static/images/products',
-            filename,
-            mimetype='image/jpeg',
-            as_attachment=False
-        )
-    except Exception as e:
-        print(f"Fout bij serveren van afbeelding {filename}: {e}")
-        return "Afbeelding niet gevonden", 404
 
 
 @app.route('/edit_row/<int:row_id>', methods=['POST'])
@@ -489,7 +324,7 @@ def edit_row(row_id):
             'stock': row_data.get('Voorraad', 69),
             'delivery_time': row_data.get('Levertijd', ''),
             'delivery_method': row_data.get('Afleverwijze', ''),
-            'for_sale': row_data.get('Te koop', 'ja'),
+            'for_sale': row_data.get('Te koop', 'Ja'),
             'marketplace_participant': row_data.get('Marktdeelnemer', ''),
             'edit_row_id': row_id  # Onthoud welke rij we bewerken
         }
@@ -529,22 +364,7 @@ def delete_row(row_id):
 
 
 if __name__ == '__main__':
-    # Zorg dat de output directory bestaat
-    os.makedirs(os.path.dirname(OUTPUT_EXCEL), exist_ok=True)
-    os.makedirs('static/images/products', exist_ok=True)
-    
-    # Zorg dat het Excel template bestaat
+    # Zorg dat Excel bestand bestaat bij startup
     ensure_excel_exists()
     
-    # Docker-friendly configuratie
-    debug_mode = os.getenv('FLASK_ENV', 'development') == 'development'
-    host = '0.0.0.0'  # Accepteer verbindingen van alle interfaces (Docker)
-    port = int(os.getenv('PORT', 5000))
-    
-    print(f"🚀 Starting Bol.com Scraper on {host}:{port}")
-    print(f"📁 Excel output: {OUTPUT_EXCEL}")
-    print(f"🖼️  Image base URL: {IMAGE_BASE_URL}")
-    print(f"🔧 Debug mode: {debug_mode}")
-    print(f"🌐 Headless browser: {HEADLESS}")
-    
-    app.run(debug=debug_mode, host=host, port=port)
+    app.run(debug=True, host='127.0.0.1', port=5000)
