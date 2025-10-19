@@ -1,0 +1,26 @@
+services:
+  bol-scraper:
+    build: .
+    container_name: bol-scraper-app
+    ports:
+      - "5001:5000"
+    environment:
+      - FLASK_SECRET_KEY=${FLASK_SECRET_KEY:-dev-secret-key-change-in-production}
+      - HEADLESS=${HEADLESS:-true}
+      - OUTPUT_EXCEL=${OUTPUT_EXCEL:-scraped_products.xlsx}
+      - FLASK_DEBUG=${FLASK_DEBUG:-0}
+    volumes:
+      # Persisteer Excel bestanden en afbeeldingen
+      - ./bol_scraper:/app/bol_scraper
+      - scraped-data:/app/bol_scraper/static/images/products
+    restart: unless-stopped
+    networks:
+      - bol-scraper-network
+
+networks:
+  bol-scraper-network:
+    driver: bridge
+
+volumes:
+  scraped-data:
+

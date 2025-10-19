@@ -427,4 +427,5 @@ if __name__ == '__main__':
     # Zorg dat Excel bestand bestaat bij startup
     ensure_excel_exists()
     
-    app.run(debug=True, host='127.0.0.1', port=5000)
+    # Gebruik 0.0.0.0 voor Docker compatibility
+    app.run(debug=True, host='0.0.0.0', port=5000)

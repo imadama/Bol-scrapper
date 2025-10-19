@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# Virtual Environment
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Data bestanden (deze worden via volumes gemount)
+bol_scraper/*.xlsx
+bol_scraper/static/images/products/*
+
+# SSL certificaten
+ssl/
+
+# Logs
+*.log
+
+# Environment files
+.env
+.env.local
+

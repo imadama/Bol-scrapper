@@ -1,0 +1,72 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+MANIFEST
+
+# Virtual Environment
+venv/
+env/
+ENV/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Excel bestanden (data)
+*.xlsx
+!Export_generic_template_20251004_07 PM052.xlsx
+
+# Images (maar niet de directory zelf)
+bol_scraper/static/images/products/*
+!bol_scraper/static/images/products/.gitkeep
+
+# SSL certificaten
+ssl/*.pem
+ssl/*.key
+ssl/*.crt
+
+# Logs
+*.log
+logs/
+
+# Flask
+instance/
+.webassets-cache
+
+# Pytest
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Docker (optioneel, als je deze wel wilt tracken, haal dan weg)
+# docker-compose.override.yml
+

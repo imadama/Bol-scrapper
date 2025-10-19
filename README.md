@@ -24,7 +24,22 @@ De scraper extraheert de volgende productinformatie:
 
 ## 🚀 Quickstart
 
-### 1. Installatie
+### Optie A: Docker (Aanbevolen) 🐳
+
+```bash
+# 1. Zorg dat Docker Desktop draait
+# 2. Navigeer naar project directory
+cd Bol-scrapper
+
+# 3. Start met Docker Compose
+docker-compose up --build
+
+# 4. Open browser: http://localhost:5001
+```
+
+✅ **Klaar!** Geen Python installatie nodig. Zie [DOCKER_INSTRUCTIES.md](DOCKER_INSTRUCTIES.md) voor meer details.
+
+### Optie B: Lokale Installatie
 
 ```bash
 # Clone repository
