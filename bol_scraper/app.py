@@ -3,8 +3,12 @@ Flask app voor Bol.com scraper
 """
 import os
 import io
-from typing import Dict, Any, Optional
+import re
+import hashlib
+from typing import Dict, Any, Optional, List, Tuple
 from urllib.parse import urlparse
+from urllib.request import Request, urlopen
+from urllib.error import URLError, HTTPError
 
 import pandas as pd
 from flask import Flask, render_template, request, redirect, url_for, flash, session, send_file
@@ -21,6 +25,11 @@ app.secret_key = os.getenv('FLASK_SECRET_KEY', 'dev-secret-key')
 # Configuratie
 HEADLESS = os.getenv('HEADLESS', 'true').lower() == 'true'
 OUTPUT_EXCEL = os.getenv('OUTPUT_EXCEL', 'Export_generic_template_20251004_07 PM052.xlsx')
+PUBLIC_BASE_URL = os.getenv('PUBLIC_BASE_URL', '').rstrip('/')  # optioneel, bv. https://example.com
+
+# Static pad voor afbeeldingen (Flask serveert /static automatisch vanuit deze map)
+STATIC_IMAGES_DIR = os.path.join(os.path.dirname(__file__), 'static', 'images', 'products')
+os.makedirs(STATIC_IMAGES_DIR, exist_ok=True)
 
 # Excel kolomvolgorde (exact zoals gespecificeerd in template)
 EXCEL_COLUMNS = [
@@ -48,6 +57,147 @@ def validate_bol_url(url: str) -> bool:
         return parsed.netloc and 'bol.com' in parsed.netloc
     except:
         return False
+
+
+def normalize_bol_url(url: str) -> str:
+    """Probeer van invoer een geldige bol.com URL te maken.
+    - Voegt https:// toe als schema ontbreekt
+    - Trimt whitespace
+    - Accepteert www.bol.com/... of bol.com/...
+    """
+    if not url:
+        return ''
+    raw = url.strip()
+    # Pad-only invoer direct mappen naar bol.com
+    if raw.startswith('/'):
+        return 'https://www.bol.com' + raw
+    # Geen schema opgegeven
+    if not re.match(r'^https?://', raw, flags=re.IGNORECASE):
+        first_token = raw.split('/')[0].lower()
+        if '.' in first_token:
+            # Lijkt een host (bijv. bol.com/... of www.bol.com/...)
+            raw = 'https://' + raw
+        else:
+            # Lijkt een pad zonder leading slash (bijv. product/123)
+            return 'https://www.bol.com/' + raw
+    parsed = urlparse(raw)
+    # Als nog steeds geen host, behandel het als pad
+    if not parsed.netloc and parsed.path:
+        return 'https://www.bol.com' + (parsed.path if parsed.path.startswith('/') else ('/' + parsed.path)) + (('?' + parsed.query) if parsed.query else '')
+    # Host controle
+    host = (parsed.netloc or '').lower()
+    if host.endswith('bol.com'):
+        return raw
+    # Forceer bol.com met behoud van pad en query
+    if parsed.path:
+        return 'https://www.bol.com' + (parsed.path if parsed.path.startswith('/') else ('/' + parsed.path)) + (('?' + parsed.query) if parsed.query else '')
+    return raw
+
+
+def is_valid_image_source_url(url: str) -> bool:
+    """Valideer bron-URL tegen Bol eisen (basis checks; uiteindelijke URL wordt lokaal)."""
+    try:
+        parsed = urlparse(url)
+        if not parsed.scheme or not parsed.netloc:
+            return False
+        # Geen shorteners (simpele blacklist)
+        host = parsed.netloc.lower()
+        if host in { 'bit.ly', 't.ly', 'tinyurl.com', 'goo.gl', 'ow.ly', 'buff.ly' }:
+            return False
+        return True
+    except Exception:
+        return False
+
+
+def guess_extension(content_type: str, fallback: str = '.jpg') -> str:
+    ct = (content_type or '').lower()
+    if 'jpeg' in ct:
+        return '.jpg'
+    if 'jpg' in ct:
+        return '.jpg'
+    if 'png' in ct:
+        return '.png'
+    return fallback
+
+
+def sanitize_filename(name: str) -> str:
+    """Maak veilige bestandsnaam: geen spaties/rare chars, lowercase."""
+    name = name.strip().lower()
+    name = name.replace(' ', '-')
+    # Alleen a-z0-9-_ .
+    name = re.sub(r'[^a-z0-9\-_.]', '', name)
+    name = re.sub(r'-{2,}', '-', name)
+    name = name.strip('-.')
+    return name or 'image'
+
+
+def build_image_filename(title: str, ean: str, index: int, ext: str, source_url: str) -> str:
+    base = sanitize_filename(f"{title}-{ean}" if ean else title)
+    # Hash erbij voor uniqueness bij gelijke titels
+    url_hash = hashlib.sha1(source_url.encode('utf-8')).hexdigest()[:8]
+    filename = f"{base}-{index+1}-{url_hash}{ext}"
+    return filename
+
+
+def download_image_to_static(source_url: str, title: str, ean: str, index: int) -> Optional[str]:
+    """Download afbeelding en sla op in static, return serveerbare URL (/static/...)."""
+    if not is_valid_image_source_url(source_url):
+        return None
+    try:
+        req = Request(source_url, headers={
+            'User-Agent': 'Mozilla/5.0 (compatible; BolScraper/1.0)'
+        })
+        with urlopen(req, timeout=20) as resp:
+            content_type = resp.headers.get('Content-Type', '')
+            if not any(x in (content_type or '').lower() for x in ['image/jpeg', 'image/jpg', 'image/png']):
+                return None
+            data = resp.read()
+            ext = guess_extension(content_type)
+    except (HTTPError, URLError, TimeoutError):
+        return None
+    except Exception:
+        return None
+
+    filename = build_image_filename(title, ean, index, ext, source_url)
+    abs_path = os.path.join(STATIC_IMAGES_DIR, filename)
+    try:
+        with open(abs_path, 'wb') as f:
+            f.write(data)
+    except Exception:
+        return None
+
+    # Bouw publieke/serveerbare URL (zonder spaties, eindigt op .jpg/.png)
+    rel_path = f"/static/images/products/{filename}"
+    # Gebruik PUBLIC_BASE_URL of fallback naar localhost:5001 (nooit relatieve paden)
+    base = PUBLIC_BASE_URL if PUBLIC_BASE_URL else "http://localhost:5001"
+    return f"{base}{rel_path}"
+
+
+def process_images_into_static(main_image_url: str, all_images_concat: str, title: str, ean: str) -> Tuple[str, str]:
+    """Download hoofd- en additionele afbeeldingen en return lokale URLs (gescheiden door |)."""
+    urls: List[str] = []
+    if main_image_url:
+        urls.append(main_image_url)
+    if all_images_concat:
+        urls.extend([u for u in all_images_concat.split('|') if u])
+
+    # Dedupe met behoud van volgorde
+    seen = set()
+    ordered_urls = []
+    for u in urls:
+        if u not in seen:
+            seen.add(u)
+            ordered_urls.append(u)
+
+    stored_urls: List[str] = []
+    for i, src in enumerate(ordered_urls):
+        stored = download_image_to_static(src, title=title or 'product', ean=ean or '', index=i)
+        if stored:
+            stored_urls.append(stored)
+
+    new_main = stored_urls[0] if stored_urls else ''
+    new_all = '|'.join(stored_urls)
+    return new_main, new_all
 
 
 def ensure_excel_exists() -> None:
@@ -151,14 +301,15 @@ def index():
 @app.route('/scrape', methods=['POST'])
 def scrape():
     """Start scrape van bol.com URL."""
-    url = request.form.get('url', '').strip()
+    incoming = request.form.get('url', '').strip()
+    url = normalize_bol_url(incoming)
     
     if not url:
         flash('Voer een URL in', 'error')
         return redirect(url_for('index'))
     
     if not validate_bol_url(url):
-        flash('URL moet van bol.com zijn', 'error')
+        flash('URL moet van bol.com zijn (invoer automatisch proberen te corrigeren is mislukt)', 'error')
         return redirect(url_for('index'))
     
     try:
@@ -174,6 +325,20 @@ def scrape():
         product_data['delivery_method'] = ''
         product_data['for_sale'] = 'ja'
         product_data['marketplace_participant'] = ''
+
+        # Download afbeeldingen naar /static en vervang URLs door serveerbare lokale URLs
+        try:
+            new_main, new_all = process_images_into_static(
+                product_data.get('main_image', ''),
+                product_data.get('all_images', ''),
+                title=product_data.get('title', ''),
+                ean=product_data.get('ean', '')
+            )
+            product_data['main_image'] = new_main
+            product_data['all_images'] = new_all
+        except Exception:
+            # Bij fout: laat originele URLs staan
+            pass
         
         # Zet in session
         session['current_row'] = product_data

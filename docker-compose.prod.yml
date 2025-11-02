@@ -3,19 +3,18 @@ services:
     build: .
     container_name: bol-scraper-app
     ports:
-      - "5001:5000"
+      - "127.0.0.1:5000:5000"  # Alleen lokaal, Nginx proxied ernaartoe
     environment:
-      - FLASK_SECRET_KEY=${FLASK_SECRET_KEY:-dev-secret-key-change-in-production}
+      - FLASK_SECRET_KEY=${FLASK_SECRET_KEY}
       - HEADLESS=${HEADLESS:-true}
       - OUTPUT_EXCEL=${OUTPUT_EXCEL:-scraped_products.xlsx}
-      - FLASK_DEBUG=${FLASK_DEBUG:-0}
-      - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-http://localhost:5001}
+      - FLASK_DEBUG=0
+      - PUBLIC_BASE_URL=${PUBLIC_BASE_URL}
     volumes:
       # Persisteer Excel bestanden en afbeeldingen
       - ./bol_scraper:/app/bol_scraper
-      # Zorg dat je de images op de host ziet en direct kunt benaderen
       - ./bol_scraper/static/images/products:/app/bol_scraper/static/images/products
-    restart: unless-stopped
+    restart: always
     networks:
       - bol-scraper-network
 
