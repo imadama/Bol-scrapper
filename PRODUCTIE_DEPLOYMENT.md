@@ -90,7 +90,7 @@ TTL: 3600
 
 ```bash
 # Test of DNS werkt (kan 5-30 minuten duren)
-nslookup scraper.mijndomein.nl
+nslookup scraper.ttbanden.nl
 ```
 
 ---
@@ -108,19 +108,6 @@ git clone https://github.com/JOUW-USERNAME/Bol-scrapper.git
 cd Bol-scrapper
 ```
 
-**Of upload via SCP:**
-
-```bash
-# Lokaal op je Mac
-scp -r /Users/emi/Documents/GitHub/Bol-scrapper root@JE-SERVER-IP:/root/
-```
-
-### 3.2 Maak productie environment file
-
-```bash
-cd ~/Bol-scrapper
-nano .env
-```
 
 Voeg toe:
 
@@ -130,7 +117,7 @@ FLASK_SECRET_KEY=GENEREER-LANGE-RANDOM-STRING-HIER
 HEADLESS=true
 OUTPUT_EXCEL=scraped_products.xlsx
 FLASK_DEBUG=0
-PUBLIC_BASE_URL=https://scraper.mijndomein.nl
+PUBLIC_BASE_URL=https://scraper.ttbanden.nl
 ```
 
 **Genereer veilige secret key:**
