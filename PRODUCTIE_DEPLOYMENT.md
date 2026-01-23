@@ -219,7 +219,7 @@ sudo systemctl restart nginx
 ### 5.1 Verkrijg gratis SSL certificaat met Certbot
 
 ```bash
-sudo certbot --nginx -d scraper.mijndomein.nl
+sudo certbot --nginx -d scraper.ttbanden.nl
 ```
 
 Volg de prompts:

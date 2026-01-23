@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="nl">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -10,61 +11,63 @@
             padding: 0;
             box-sizing: border-box;
         }
-        
+
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
             padding: 20px;
         }
-        
+
         .container {
             max-width: 800px;
             margin: 0 auto;
             background: white;
             border-radius: 12px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
             overflow: hidden;
         }
-        
+
         .header {
             background: #2c3e50;
             color: white;
             padding: 30px;
             text-align: center;
         }
-        
+
         .header h1 {
             font-size: 2rem;
             margin-bottom: 10px;
         }
-        
+
         .content {
             padding: 40px;
         }
-        
+
         .form-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 25px;
         }
-        
+
         .form-group {
             margin-bottom: 25px;
         }
-        
+
         .form-group.full-width {
             grid-column: 1 / -1;
         }
-        
+
         label {
             display: block;
             margin-bottom: 8px;
             font-weight: 600;
             color: #2c3e50;
         }
-        
-        input, textarea, select {
+
+        input,
+        textarea,
+        select {
             width: 100%;
             padding: 12px;
             border: 2px solid #e1e8ed;
@@ -73,24 +76,26 @@
             transition: border-color 0.3s;
             font-family: inherit;
         }
-        
-        input:focus, textarea:focus, select:focus {
+
+        input:focus,
+        textarea:focus,
+        select:focus {
             outline: none;
             border-color: #667eea;
         }
-        
+
         textarea {
             min-height: 120px;
             resize: vertical;
         }
-        
+
         .button-group {
             display: flex;
             gap: 15px;
             margin-top: 30px;
             justify-content: center;
         }
-        
+
         .btn {
             padding: 15px 30px;
             border: none;
@@ -103,33 +108,33 @@
             display: inline-block;
             text-align: center;
         }
-        
+
         .btn-primary {
             background: #667eea;
             color: white;
         }
-        
+
         .btn-primary:hover {
             background: #5a6fd8;
             transform: translateY(-2px);
         }
-        
+
         .btn-secondary {
             background: #95a5a6;
             color: white;
         }
-        
+
         .btn-secondary:hover {
             background: #7f8c8d;
             transform: translateY(-2px);
         }
-        
+
         .field-info {
             font-size: 12px;
             color: #7f8c8d;
             margin-top: 5px;
         }
-        
+
         .image-preview {
             max-width: 200px;
             max-height: 200px;
@@ -138,13 +143,14 @@
         }
     </style>
 </head>
+
 <body>
     <div class="container">
         <div class="header">
             <h1>✏️ Bewerk Productdata</h1>
             <p>Controleer en pas de gescrapete data aan</p>
         </div>
-        
+
         <div class="content">
             <form method="POST">
                 <div class="form-grid">
@@ -153,117 +159,183 @@
                         <input type="url" id="source_url" name="source_url" value="{{ data.source_url }}" readonly>
                         <div class="field-info">Alleen-lezen</div>
                     </div>
-                    
+
                     <div class="form-group">
-                        <label for="Productnaam">Productnaam:</label>
-                        <input type="text" id="Productnaam" name="Productnaam" value="{{ data.title }}">
+                        <div
+                            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                            <label for="Productnaam" style="margin-bottom: 0;">Productnaam:</label>
+                            <button type="button" id="ai-title-btn" class="btn-ai"
+                                style="background: linear-gradient(135deg, #a8c0ff 0%, #3f2b96 100%); color: white; border: none; padding: 5px 15px; border-radius: 20px; font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 5px;">
+                                ✨ Verbeter met AI
+                            </button>
+                        </div>
+                        <input type="text" id="Productnaam" name="Productnaam" value="{{ data.title }}" required>
                     </div>
-                    
+
                     <div class="form-group">
                         <label for="EAN">EAN:</label>
                         <input type="text" id="EAN" name="EAN" value="{{ data.ean }}">
                     </div>
-                    
+
                     <div class="form-group">
                         <label for="Prijs">Prijs:</label>
-                        <input type="number" id="Prijs" name="Prijs" 
-                               value="{{ data.list_price_value if data.list_price_value else '' }}" 
-                               step="0.01">
+                        <input type="number" id="Prijs" name="Prijs"
+                            value="{{ data.list_price_value if data.list_price_value else '' }}" step="0.01">
                         <div class="field-info">Bijv: 64.74</div>
                     </div>
-                    
+
+                    <!-- Marge Calculatie Sectie -->
+                    <div class="form-group full-width"
+                        style="background: #f8f9fa; padding: 20px; border-radius: 8px; border: 1px solid #e9ecef;">
+                        <h3 style="margin-bottom: 15px; font-size: 1.1rem; color: #2c3e50;">💰 Marge Calculator</h3>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                            <div class="form-group">
+                                <label for="Inkoopprijs">Inkoopprijs (€):</label>
+                                <input type="number" id="Inkoopprijs" name="Inkoopprijs"
+                                    value="{{ data.cost_price if data.cost_price else '' }}" step="0.01">
+                            </div>
+                            <div class="form-group">
+                                <label for="Verzendkosten">Verzendkosten (€):</label>
+                                <input type="number" id="Verzendkosten" name="Verzendkosten"
+                                    value="{{ data.shipping_costs if data.shipping_costs else '0' }}" step="0.01">
+                            </div>
+                            <div class="form-group">
+                                <label for="Commissie Percentage">Commissie %:</label>
+                                <input type="number" id="commission_percentage" name="Commissie Percentage"
+                                    value="{{ data.commission_percentage if data.commission_percentage else '13' }}"
+                                    step="0.1">
+                                <div class="field-info">Standaard ca. 13%</div>
+                            </div>
+                            <div class="form-group">
+                                <label for="Commissie Vast">Vaste Commissie (€):</label>
+                                <input type="number" id="commission_fixed" name="Commissie Vast"
+                                    value="{{ data.commission_fixed if data.commission_fixed else '0.85' }}"
+                                    step="0.01">
+                                <div class="field-info">Standaard ca. €0.85</div>
+                            </div>
+                            <div class="form-group">
+                                <label for="Bol Commissie">Totale Commissie (€):</label>
+                                <input type="number" id="commission_amount" name="Bol Commissie"
+                                    value="{{ data.commission_amount if data.commission_amount else '' }}" readonly
+                                    step="0.01" style="background: #e9ecef;">
+                            </div>
+                            <div class="form-group">
+                                <label for="Marge">Winst / Marge (€):</label>
+                                <input type="number" id="Marge" name="Marge"
+                                    value="{{ data.margin if data.margin else '' }}" readonly step="0.01"
+                                    style="font-weight: bold; font-size: 1.1em;">
+                            </div>
+                        </div>
+                        <div class="field-info" style="margin-top: 10px;">
+                            <a href="https://partnerplatform.bol.com/nl/hulp-nodig/financien/bemiddelingsbijdrage-berekenen/"
+                                target="_blank">
+                                ℹ️ Check actuele Bol.com tarieven
+                            </a>
+                        </div>
+                    </div>
+
                     <div class="form-group full-width">
-                        <label for="Beschrijving">Beschrijving:</label>
+                        <div
+                            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                            <label for="Beschrijving" style="margin-bottom: 0;">Beschrijving:</label>
+                            <button type="button" id="ai-btn" class="btn-ai"
+                                style="background: linear-gradient(135deg, #a8c0ff 0%, #3f2b96 100%); color: white; border: none; padding: 5px 15px; border-radius: 20px; font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 5px;">
+                                ✨ Verbeter met AI
+                            </button>
+                        </div>
                         <textarea id="Beschrijving" name="Beschrijving">{{ data.description }}</textarea>
                     </div>
-                    
+
                     <div class="form-group">
                         <label for="Hoofdafbeelding">Hoofdafbeelding:</label>
                         <input type="url" id="Hoofdafbeelding" name="Hoofdafbeelding" value="{{ data.main_image }}">
                         {% if data.main_image %}
-                            <img src="{{ data.main_image }}" alt="Hoofdafbeelding" class="image-preview">
+                        <img src="{{ data.main_image }}" alt="Hoofdafbeelding" class="image-preview">
                         {% endif %}
                     </div>
-                    
+
                     <div class="form-group">
                         <label for="Additionele afbeeldingen">Additionele afbeeldingen:</label>
-                        <textarea id="Additionele afbeeldingen" name="Additionele afbeeldingen" rows="4">{{ data.all_images }}</textarea>
+                        <textarea id="Additionele afbeeldingen" name="Additionele afbeeldingen"
+                            rows="4">{{ data.all_images }}</textarea>
                         <div class="field-info">Gescheiden door |</div>
                     </div>
-                    
+
                     <!-- Nieuwe velden -->
                     <div class="form-group">
                         <label for="Conditie">Conditie:</label>
                         <select id="Conditie" name="Conditie">
-                            <option value="nieuw" {{ 'selected' if data.condition == 'nieuw' or not data.condition }}>nieuw</option>
-                            <option value="als nieuw" {{ 'selected' if data.condition == 'als nieuw' }}>als nieuw</option>
-                            <option value="redelijk" {{ 'selected' if data.condition == 'redelijk' }}>redelijk</option>
-                            <option value="matig" {{ 'selected' if data.condition == 'matig' }}>matig</option>
-                            <option value="goed" {{ 'selected' if data.condition == 'goed' }}>goed</option>
+                            <option value="nieuw" {{ 'selected' if data.condition=='nieuw' or not data.condition }}>
+                                nieuw</option>
+                            <option value="als nieuw" {{ 'selected' if data.condition=='als nieuw' }}>als nieuw</option>
+                            <option value="redelijk" {{ 'selected' if data.condition=='redelijk' }}>redelijk</option>
+                            <option value="matig" {{ 'selected' if data.condition=='matig' }}>matig</option>
+                            <option value="goed" {{ 'selected' if data.condition=='goed' }}>goed</option>
                         </select>
                     </div>
-                    
+
                     <div class="form-group">
                         <label for="Conditie commentaar">Conditie commentaar:</label>
-                        <input type="text" id="Conditie commentaar" name="Conditie commentaar" 
-                               value="{{ data.condition_comment }}" maxlength="200">
+                        <input type="text" id="Conditie commentaar" name="Conditie commentaar"
+                            value="{{ data.condition_comment }}" maxlength="200">
                         <div class="field-info">Optionele extra informatie over conditie</div>
                     </div>
-                    
+
                     <div class="form-group">
                         <label for="Interne referentie">Interne referentie:</label>
-                        <input type="text" id="Interne referentie" name="Interne referentie" 
-                               value="{{ data.internal_reference }}" maxlength="100">
+                        <input type="text" id="Interne referentie" name="Interne referentie"
+                            value="{{ data.internal_reference }}" maxlength="100">
                         <div class="field-info">Maximaal 100 karakters</div>
                     </div>
-                    
+
                     <div class="form-group">
                         <label for="Voorraad">Voorraad:</label>
-                        <input type="number" id="Voorraad" name="Voorraad" 
-                               value="{{ data.stock if data.stock is not none else 69 }}" min="0">
+                        <input type="number" id="Voorraad" name="Voorraad"
+                            value="{{ data.stock if data.stock is not none else 69 }}" min="0">
                         <div class="field-info">Alleen getallen</div>
                     </div>
-                    
+
                     <div class="form-group">
                         <label for="Levertijd">Levertijd:</label>
                         <select id="Levertijd" name="Levertijd">
                             <option value="">Selecteer levertijd</option>
-                            <option value="VVB" {{ 'selected' if data.delivery_time == 'VVB' }}>VVB</option>
-                            <option value="1-2d" {{ 'selected' if data.delivery_time == '1-2d' }}>1-2d</option>
-                            <option value="2-3d" {{ 'selected' if data.delivery_time == '2-3d' }}>2-3d</option>
-                            <option value="4-8d" {{ 'selected' if data.delivery_time == '4-8d' }}>4-8d</option>
-                            <option value="3-5d" {{ 'selected' if data.delivery_time == '3-5d' }}>3-5d</option>
-                            <option value="1-8d" {{ 'selected' if data.delivery_time == '1-8d' }}>1-8d</option>
+                            <option value="VVB" {{ 'selected' if data.delivery_time=='VVB' }}>VVB</option>
+                            <option value="1-2d" {{ 'selected' if data.delivery_time=='1-2d' }}>1-2d</option>
+                            <option value="2-3d" {{ 'selected' if data.delivery_time=='2-3d' }}>2-3d</option>
+                            <option value="4-8d" {{ 'selected' if data.delivery_time=='4-8d' }}>4-8d</option>
+                            <option value="3-5d" {{ 'selected' if data.delivery_time=='3-5d' }}>3-5d</option>
+                            <option value="1-8d" {{ 'selected' if data.delivery_time=='1-8d' }}>1-8d</option>
                         </select>
                     </div>
-                    
+
                     <div class="form-group">
                         <label for="Afleverwijze">Afleverwijze:</label>
                         <select id="Afleverwijze" name="Afleverwijze">
                             <option value="">Selecteer afleverwijze</option>
-                            <option value="verkoper" {{ 'selected' if data.delivery_method == 'verkoper' }}>verkoper</option>
-                            <option value="Lbv" {{ 'selected' if data.delivery_method == 'Lbv' }}>Lbv</option>
+                            <option value="verkoper" {{ 'selected' if data.delivery_method=='verkoper' }}>verkoper
+                            </option>
+                            <option value="Lbv" {{ 'selected' if data.delivery_method=='Lbv' }}>Lbv</option>
                         </select>
                     </div>
-                    
+
                     <div class="form-group">
                         <label for="Te koop">Te koop:</label>
                         <select id="Te koop" name="Te koop">
-                            <option value="ja" {{ 'selected' if data.for_sale == 'ja' or not data.for_sale }}>ja</option>
-                            <option value="nee" {{ 'selected' if data.for_sale == 'nee' }}>nee</option>
+                            <option value="ja" {{ 'selected' if data.for_sale=='ja' or not data.for_sale }}>ja</option>
+                            <option value="nee" {{ 'selected' if data.for_sale=='nee' }}>nee</option>
                         </select>
                     </div>
-                    
+
                     <div class="form-group">
                         <label for="Marktdeelnemer">Marktdeelnemer:</label>
-                        <input type="text" id="Marktdeelnemer" name="Marktdeelnemer" 
-                               value="{{ data.marketplace_participant }}" maxlength="100">
+                        <input type="text" id="Marktdeelnemer" name="Marktdeelnemer"
+                            value="{{ data.marketplace_participant }}" maxlength="100">
                         <div class="field-info">Naam van verkoper/leverancier</div>
                     </div>
                 </div>
-                
+
                 <div class="button-group">
-                    <a href="{{ url_for('index') }}" class="btn btn-secondary">
+                    <a href="{{ url_for('bol_index') }}" class="btn btn-secondary">
                         ← Terug
                     </a>
                     <button type="submit" class="btn btn-primary">
@@ -273,5 +345,154 @@
             </form>
         </div>
     </div>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const priceInput = document.getElementById('Prijs');
+            const costInput = document.getElementById('Inkoopprijs');
+            const shippingInput = document.getElementById('Verzendkosten');
+            const commPercInput = document.getElementById('commission_percentage');
+            const commFixedInput = document.getElementById('commission_fixed');
+            const commAmountInput = document.getElementById('commission_amount');
+            const btwAmountInput = document.getElementById('btw_amount');
+            const marginInput = document.getElementById('Marge');
+
+            function calculate() {
+                const price = parseFloat(priceInput.value) || 0;
+                const cost = parseFloat(costInput.value) || 0;
+                const shipping = parseFloat(shippingInput.value) || 0;
+                const commPerc = parseFloat(commPercInput.value) || 0;
+                const commFixed = parseFloat(commFixedInput.value) || 0;
+
+                // 1. BTW Berekening (21% uit de verkoopprijs halen)
+                // Verkoopprijs is incl. BTW. Ex BTW = Prijs / 1.21
+                // BTW bedrag = Prijs - (Prijs / 1.21)
+                let btw = 0;
+                if (price > 0) {
+                    btw = price - (price / 1.21);
+                }
+
+                // 2. Commissie berekening 
+                // Bol rekent commissie over de verkoopprijs INCL BTW.
+                let commission = 0;
+                if (price > 0) {
+                    commission = commFixed + (price * (commPerc / 100));
+                }
+
+                // 3. Marge = (Prijs - BTW) - Inkoopprijs - Verzendkosten - Commissie
+                // We gaan er hier vanuit dat inkoopprijs en verzendkosten EX BTW zijn ingevoerd, 
+                // of dat de gebruiker de netto kosten bedoelt.
+                // Als de gebruiker consumentenprijzen invoert als kosten (incl BTW), is de marge eigenlijk lager 
+                // tenzij de BTW teruggevraagd wordt (zakelijk). 
+                // Voor nu: Marge = Netto Opbrengst - Kosten - Commissie
+                const netRevenue = price - btw;
+                const margin = netRevenue - cost - shipping - commission;
+
+                // Update UI
+                commAmountInput.value = commission.toFixed(2);
+                if (btwAmountInput) btwAmountInput.value = btw.toFixed(2);
+                marginInput.value = margin.toFixed(2);
+
+                if (margin >= 0) {
+                    marginInput.style.color = '#27ae60'; // Green
+                    marginInput.style.backgroundColor = '#e8f8f5';
+                } else {
+                    marginInput.style.color = '#c0392b'; // Red
+                    marginInput.style.backgroundColor = '#fdedec';
+                }
+            }
+
+            // Event listeners
+            [priceInput, costInput, shippingInput, commPercInput, commFixedInput].forEach(input => {
+                if (input) {
+                    input.addEventListener('input', calculate);
+                }
+            });
+
+            // Initial calculation
+            calculate();
+
+            // AI Description Optimization
+            const aiBtn = document.getElementById('ai-btn');
+            const descInput = document.getElementById('Beschrijving');
+            const titleInput = document.getElementById('Productnaam');
+
+            if (aiBtn) {
+                aiBtn.addEventListener('click', async function () {
+                    const originalText = aiBtn.innerHTML;
+                    aiBtn.innerHTML = '⏳ Bezig...';
+                    aiBtn.disabled = true;
+
+                    try {
+                        const response = await fetch('/api/optimize-description', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                title: titleInput ? titleInput.value : '',
+                                description: descInput ? descInput.value : ''
+                            })
+                        });
+
+                        const data = await response.json();
+
+                        if (data.error) {
+                            alert('Fout: ' + data.error);
+                        } else if (data.result) {
+                            descInput.value = data.result;
+                            // Trigger auto-resize if needed or simple highlight
+                            descInput.style.borderColor = '#667eea';
+                            setTimeout(() => descInput.style.borderColor = '#e1e8ed', 1000);
+                        }
+                    } catch (e) {
+                        alert('Er ging iets mis bij het verbinden met de AI service.');
+                    } finally {
+                        aiBtn.innerHTML = originalText;
+                        aiBtn.disabled = false;
+                    }
+                });
+            }
+
+            // AI Title Optimization
+            const aiTitleBtn = document.getElementById('ai-title-btn');
+
+            if (aiTitleBtn) {
+                aiTitleBtn.addEventListener('click', async function () {
+                    const originalText = aiTitleBtn.innerHTML;
+                    aiTitleBtn.innerHTML = '⏳ Bezig...';
+                    aiTitleBtn.disabled = true;
+
+                    try {
+                        const response = await fetch('/api/optimize-title', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                title: titleInput ? titleInput.value : '',
+                                description: descInput ? descInput.value : ''
+                            })
+                        });
+
+                        const data = await response.json();
+
+                        if (data.error) {
+                            alert('Fout: ' + data.error);
+                        } else if (data.result) {
+                            titleInput.value = data.result;
+                            titleInput.style.borderColor = '#667eea';
+                            setTimeout(() => titleInput.style.borderColor = '#e1e8ed', 1000);
+                        }
+                    } catch (e) {
+                        alert('Er ging iets mis bij het verbinden met de AI service.');
+                    } finally {
+                        aiTitleBtn.innerHTML = originalText;
+                        aiTitleBtn.disabled = false;
+                    }
+                });
+            }
+        });
+    </script>
 </body>
+
 </html>

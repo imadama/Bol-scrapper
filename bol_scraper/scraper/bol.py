@@ -193,7 +193,7 @@ def scrape_bol_product(url: str, headless: bool = True) -> Dict[str, Any]:
         raise ValueError("URL moet van bol.com zijn")
     
     with sync_playwright() as p:
-        browser: Browser = p.chromium.launch(headless=headless)
+        browser: Browser = p.webkit.launch(headless=headless)
         page: Page = browser.new_page()
         
         try:
@@ -228,7 +228,7 @@ def scrape_bol_product(url: str, headless: bool = True) -> Dict[str, Any]:
             
             # Main image is eerste uit galerij
             main_image = gallery_images[0] if gallery_images else ""
-            all_images = "|".join(gallery_images)
+            all_images = "\n".join(gallery_images)
             
             return {
                 "source_url": url,

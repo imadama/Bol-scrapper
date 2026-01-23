@@ -1,64 +1,66 @@
 <!DOCTYPE html>
 <html lang="nl">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bol.com Scraper</title>
+    <title>Printables Scraper</title>
     <style>
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
-        
+
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #FF6600 0%, #FF9933 100%);
+            /* Printables Orange */
             min-height: 100vh;
             padding: 20px;
         }
-        
+
         .container {
             max-width: 600px;
             margin: 0 auto;
             background: white;
             border-radius: 12px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
             overflow: hidden;
         }
-        
+
         .header {
-            background: #2c3e50;
+            background: #333333;
             color: white;
             padding: 30px;
             text-align: center;
         }
-        
+
         .header h1 {
             font-size: 2rem;
             margin-bottom: 10px;
         }
-        
+
         .header p {
             opacity: 0.8;
             font-size: 1.1rem;
         }
-        
+
         .content {
             padding: 40px;
         }
-        
+
         .form-group {
             margin-bottom: 25px;
         }
-        
+
         label {
             display: block;
             margin-bottom: 8px;
             font-weight: 600;
-            color: #2c3e50;
+            color: #333333;
         }
-        
+
         input[type="url"] {
             width: 100%;
             padding: 15px;
@@ -67,19 +69,19 @@
             font-size: 16px;
             transition: border-color 0.3s;
         }
-        
+
         input[type="url"]:focus {
             outline: none;
-            border-color: #667eea;
+            border-color: #FF6600;
         }
-        
+
         .button-group {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 15px;
             margin-top: 30px;
         }
-        
+
         .btn {
             padding: 15px 25px;
             border: none;
@@ -92,134 +94,133 @@
             display: inline-block;
             text-align: center;
         }
-        
+
         .btn-primary {
-            background: #667eea;
+            background: #FF6600;
             color: white;
         }
-        
+
         .btn-primary:hover {
-            background: #5a6fd8;
+            background: #e65c00;
             transform: translateY(-2px);
         }
-        
+
         .btn-secondary {
             background: #95a5a6;
             color: white;
         }
-        
+
         .btn-secondary:hover {
             background: #7f8c8d;
             transform: translateY(-2px);
         }
-        
+
         .btn-success {
             background: #27ae60;
             color: white;
         }
-        
+
         .btn-success:hover {
             background: #229954;
             transform: translateY(-2px);
         }
-        
+
         .btn-full {
             grid-column: 1 / -1;
         }
-        
+
         .alert {
             padding: 15px;
             border-radius: 8px;
             margin-bottom: 20px;
             font-weight: 500;
         }
-        
+
         .alert-success {
             background: #d4edda;
             color: #155724;
             border: 1px solid #c3e6cb;
         }
-        
+
         .alert-error {
             background: #f8d7da;
             color: #721c24;
             border: 1px solid #f5c6cb;
         }
-        
+
         .info-box {
-            background: #e3f2fd;
-            border: 1px solid #bbdefb;
+            background: #fff3e0;
+            border: 1px solid #ffe0b2;
             border-radius: 8px;
             padding: 20px;
             margin-top: 30px;
         }
-        
+
         .info-box h3 {
-            color: #1976d2;
+            color: #e65100;
             margin-bottom: 10px;
         }
-        
+
         .info-box p {
             color: #424242;
             line-height: 1.6;
         }
     </style>
 </head>
+
 <body>
     <div class="container">
         <div class="header">
-            <h1>🛒 Bol.com Scraper</h1>
-            <p>Scrape productdata en beheer in Excel</p>
+            <h1>📦 Printables Scraper</h1>
+            <p>Scrape modeldata en beheer in Excel</p>
         </div>
-        
+
         <div class="content">
             {% with messages = get_flashed_messages(with_categories=true) %}
-                {% if messages %}
-                    {% for category, message in messages %}
-                        <div class="alert alert-{{ 'success' if category == 'success' else 'error' }}">
-                            {{ message }}
-                        </div>
-                    {% endfor %}
-                {% endif %}
+            {% if messages %}
+            {% for category, message in messages %}
+            <div class="alert alert-{{ 'success' if category == 'success' else 'error' }}">
+                {{ message }}
+            </div>
+            {% endfor %}
+            {% endif %}
             {% endwith %}
-            
-            <form method="POST" action="{{ url_for('scrape') }}">
+
+            <form method="POST" action="{{ url_for('printables_scrape') }}">
                 <div class="form-group">
-                    <label for="url">Bol.com Product URL:</label>
-                    <input 
-                        type="url" 
-                        id="url" 
-                        name="url" 
-                        placeholder="https://www.bol.com/nl/nl/p/..." 
-                        required
-                    >
+                    <label for="url">Printables Model URL:</label>
+                    <input type="url" id="url" name="url" placeholder="https://www.printables.com/model/..." required>
                 </div>
-                
+
                 <div class="button-group">
                     <button type="submit" class="btn btn-primary">
-                        🔍 Scrape Product
+                        🔍 Scrape Model
                     </button>
-                    
-                    <a href="{{ url_for('rows') }}" class="btn btn-secondary">
+
+                    <a href="{{ url_for('printables_rows') }}" class="btn btn-secondary">
                         📋 Bekijk Opgeslagen
                     </a>
-                    
-                    <a href="{{ url_for('export') }}" class="btn btn-success btn-full">
+
+                    <a href="{{ url_for('printables_export') }}" class="btn btn-success btn-full">
                         📊 Exporteer Excel
                     </a>
                 </div>
+                <div style="margin-top: 20px; text-align: center;">
+                    <a href="{{ url_for('home') }}" style="color: #FF6600; text-decoration: none;">← Terug naar platform
+                        keuze</a>
+                </div>
             </form>
-            
+
             <div class="info-box">
                 <h3>💡 Tips</h3>
                 <p>
-                    • Plak een volledige bol.com product-URL<br>
-                    • Scrapen duurt meestal 2-5 seconden<br>
-                    • Data wordt lokaal opgeslagen in Excel<br>
-                    • Installeer Playwright browsers: <code>python -m playwright install</code>
+                    • Plak een volledige printables.com model-URL<br>
+                    • Scrapen duurt iets langer i.v.m. dynamische content<br>
+                    • Data wordt gedeeld in dezelfde Excel als Bol data<br>
                 </p>
             </div>
         </div>
     </div>
 </body>
+
 </html>

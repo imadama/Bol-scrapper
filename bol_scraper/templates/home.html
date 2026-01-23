@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="nl">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Platform Scraper</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a2a6c 0%, #b21f1f 100%);
+            /* Deep rich gradient */
+            background: linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%);
+            min-height: 100vh;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .header {
+            text-align: center;
+            padding: 60px 20px;
+        }
+
+        .header h1 {
+            font-size: 3rem;
+            margin-bottom: 10px;
+            font-weight: 700;
+            letter-spacing: -1px;
+        }
+
+        .header p {
+            font-size: 1.2rem;
+            opacity: 0.8;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+            padding: 20px;
+            max-width: 1200px;
+            width: 100%;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            transition: transform 0.3s, box-shadow 0.3s;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            text-decoration: none;
+            color: white;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .card-icon {
+            font-size: 3rem;
+            margin-bottom: 20px;
+        }
+
+        .card h2 {
+            font-size: 1.5rem;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        .card p {
+            font-size: 1rem;
+            opacity: 0.8;
+            margin-bottom: 25px;
+            line-height: 1.5;
+        }
+
+        .btn {
+            padding: 12px 25px;
+            border-radius: 30px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.3s;
+            display: inline-block;
+            margin-top: auto;
+        }
+
+        .btn-primary {
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(118, 75, 162, 0.4);
+        }
+
+        .btn-primary:hover {
+            transform: scale(1.05);
+            box-shadow: 0 6px 20px rgba(118, 75, 162, 0.6);
+        }
+
+        .card.coming-soon {
+            opacity: 0.6;
+            cursor: default;
+        }
+
+        .card.coming-soon:hover {
+            transform: none;
+            box-shadow: none;
+        }
+
+        .badge {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 5px 10px;
+            border-radius: 10px;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .footer {
+            margin-top: auto;
+            padding: 40px;
+            opacity: 0.5;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="header">
+        <h1>Multi-Platform Scraper</h1>
+        <p>Kies je platform en begin met het verzamelen van productdata voor Excel.</p>
+    </div>
+
+    <div class="grid">
+        <!-- Bol.com Card -->
+        <a href="{{ url_for('bol_index') }}" class="card">
+            <div class="card-icon">🛒</div>
+            <h2>Bol.com Scraper</h2>
+            <p>Scrape productdata van Bol.com, inclusief afbeeldingen, en beheer alles direct in Excel.</p>
+            <span class="btn btn-primary">Start Scraper &rarr;</span>
+        </a>
+
+        <!-- Printables Card -->
+        <a href="{{ url_for('printables_index') }}" class="card">
+            <div class="card-icon">🖨️</div>
+            <h2>Printables Scraper</h2>
+            <p>Scrape 3D modellen en metadata van Printables.com voor je database.</p>
+            <span class="btn btn-primary"
+                style="background: linear-gradient(90deg, #FF6600 0%, #FF9933 100%); width: 100%; text-align: center; padding: 10px;">Start
+                Scraper &rarr;</span>
+        </a>
+
+        <!-- Amazon Card -->
+        <a href="{{ url_for('amazon_index') }}" class="card">
+            <div class="card-icon">📦</div>
+            <h2>Amazon Scraper</h2>
+            <p>Scrape productdata van Amazon.nl, inclusief prijzen en specificaties.</p>
+            <span class="btn btn-primary"
+                style="background: linear-gradient(90deg, #FF9900 0%, #FFB84D 100%); color: black; box-shadow: 0 4px 15px rgba(255, 153, 0, 0.4); width: 100%; text-align: center; padding: 10px;">Start
+                Scraper &rarr;</span>
+        </a>
+    </div>
+
+    <div class="footer">
+        &copy; 2026 Multi-Platform Scraper Tool
+    </div>
+</body>
+
+</html>
