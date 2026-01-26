@@ -27,17 +27,45 @@ De scraper extraheert de volgende productinformatie:
 ### Optie A: Docker (Aanbevolen) 🐳
 
 ```bash
-# 1. Zorg dat Docker Desktop draait
-# 2. Navigeer naar project directory
+# 1) Zorg dat Docker Desktop draait
+# 2) Navigeer naar de project directory
 cd Bol-scrapper
 
-# 3. Start met Docker Compose
-docker-compose up --build
+# 3) Start (build + run)
+docker compose up -d --build
 
-# 4. Open browser: http://localhost:5001
+# 4) Open in je browser
+http://localhost:5002
 ```
 
-✅ **Klaar!** Geen Python installatie nodig. Zie [DOCKER_INSTRUCTIES.md](DOCKER_INSTRUCTIES.md) voor meer details.
+✅ **Klaar!** Geen Python installatie nodig.
+
+### 🔄 Update stappen (belangrijk na de nieuwste update: accounts + Postgres)
+
+Bij updates waarbij dependencies/containers zijn veranderd (zoals de commit **“Add user auth with per-user Postgres storage”**) moet je vaak **opnieuw builden**.
+
+Aanbevolen stappen:
+
+```bash
+# Zorg dat Docker Desktop draait
+cd Bol-scrapper
+
+# 1) Rebuild image (pakt nieuwe Python dependencies op)
+docker compose build --no-cache
+
+# 2) Start opnieuw (force recreate containers)
+docker compose up -d --force-recreate
+
+# 3) Check status/logs
+docker compose ps
+docker logs --tail 100 bol-scraper-app
+```
+
+Als de app blijft herstarten, is dat bijna altijd een dependency/build issue → voer bovenstaande rebuild uit.
+
+> Let op: `GOOGLE_API_KEY` is optioneel. Zonder key werkt login/scrapen nog steeds, alleen de AI-verbeter knop niet.
+
+Zie ook [DOCKER_INSTRUCTIES.md](DOCKER_INSTRUCTIES.md) voor extra details.
 
 ### Optie B: Lokale Installatie
 
@@ -76,7 +104,7 @@ cd bol_scraper
 python app.py
 ```
 
-De app is nu beschikbaar op: http://127.0.0.1:5000
+De app is nu beschikbaar op: http://127.0.0.1:5002
 
 ## ⚙️ Configuratie
 
@@ -113,7 +141,7 @@ De data wordt opgeslagen in exact deze volgorde:
 
 ### 1. Product Scrapen
 
-1. Ga naar http://127.0.0.1:5000
+1. Ga naar http://127.0.0.1:5002
 2. Plak een bol.com product-URL in het invoerveld
 3. Klik op "🔍 Scrape Product"
 4. Wacht 2-5 seconden voor het resultaat
