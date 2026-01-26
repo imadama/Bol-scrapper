@@ -4,16 +4,32 @@ Flask app voor Bol.com scraper
 import os
 import io
 import re
+import time
 import hashlib
+from datetime import datetime
+from functools import wraps
 from typing import Dict, Any, Optional, List, Tuple
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 from urllib.error import URLError, HTTPError
 
 import pandas as pd
-from flask import Flask, render_template, request, redirect, url_for, flash, session, send_file, jsonify
+from flask import Flask, render_template, request, redirect, url_for, flash, session, send_file, jsonify, g
 import google.generativeai as genai
 from dotenv import load_dotenv
+from werkzeug.security import generate_password_hash, check_password_hash
+from sqlalchemy import (
+    create_engine,
+    Column,
+    Integer,
+    String,
+    Text,
+    Float,
+    Boolean,
+    DateTime,
+    ForeignKey,
+)
+from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 
 from scraper.printables import scrape_printables_product
 from scraper.bol import scrape_bol_product
@@ -37,6 +53,12 @@ app.secret_key = os.getenv('FLASK_SECRET_KEY', 'dev-secret-key')
 HEADLESS = os.getenv('HEADLESS', 'true').lower() == 'true'
 OUTPUT_EXCEL = os.getenv('OUTPUT_EXCEL', 'Export_generic_template_20251004_07 PM052.xlsx')
 PUBLIC_BASE_URL = os.getenv('PUBLIC_BASE_URL', '').rstrip('/')  # optioneel, bv. https://example.com
+DATABASE_URL = os.getenv('DATABASE_URL') or 'sqlite:///bol_scraper.db'
+
+# Database setup
+engine = create_engine(DATABASE_URL, future=True)
+SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+Base = declarative_base()
 
 # Static pad voor afbeeldingen (Flask serveert /static automatisch vanuit deze map)
 STATIC_IMAGES_DIR = os.path.join(os.path.dirname(__file__), 'static', 'images', 'products')
@@ -60,13 +82,304 @@ EXCEL_COLUMNS = [
     'Additionele afbeeldingen' # all_images
 ]
 
+class User(Base):
+    __tablename__ = 'users'
+
+    id = Column(Integer, primary_key=True)
+    username = Column(String(80), unique=True, nullable=False)
+    password_hash = Column(String(255), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    products = relationship('Product', back_populates='user', cascade='all, delete-orphan')
+
+
+class Product(Base):
+    __tablename__ = 'products'
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+    platform = Column(String(40), nullable=True)
+    source_url = Column(Text, nullable=True)
+    title = Column(Text, nullable=True)
+    description = Column(Text, nullable=True)
+    internal_reference = Column(String(200), nullable=True)
+    ean = Column(String(100), nullable=True)
+    condition = Column(String(50), nullable=True)
+    condition_comment = Column(String(255), nullable=True)
+    stock = Column(Integer, nullable=True)
+    list_price_value = Column(Float, nullable=True)
+    delivery_time = Column(String(50), nullable=True)
+    delivery_method = Column(String(50), nullable=True)
+    for_sale = Column(String(20), nullable=True)
+    cost_price = Column(Float, nullable=True)
+    shipping_costs = Column(Float, nullable=True)
+    commission_percentage = Column(Float, nullable=True)
+    commission_fixed = Column(Float, nullable=True)
+    commission_amount = Column(Float, nullable=True)
+    margin = Column(Float, nullable=True)
+    main_image = Column(Text, nullable=True)
+    marketplace_participant = Column(String(200), nullable=True)
+    all_images = Column(Text, nullable=True)
+    is_draft = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    user = relationship('User', back_populates='products')
+
+
+def init_db() -> None:
+    Base.metadata.create_all(bind=engine)
+
+
+init_db()
+
+
+def get_db_session():
+    return SessionLocal()
+
+
+def login_required(view):
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        if not session.get('user_id'):
+            if request.path.startswith('/api/'):
+                return jsonify({'error': 'Login vereist'}), 401
+            return redirect(url_for('login'))
+        return view(*args, **kwargs)
+    return wrapped
+
+
+@app.before_request
+def load_current_user():
+    g.current_user = None
+    user_id = session.get('user_id')
+    if not user_id:
+        return
+    db = get_db_session()
+    try:
+        g.current_user = db.query(User).filter(User.id == user_id).first()
+    finally:
+        db.close()
+
+
+@app.context_processor
+def inject_current_user():
+    return {'current_user': g.get('current_user')}
+
+
+def product_to_internal_data(product: Product) -> Dict[str, Any]:
+    return {
+        'id': product.id,
+        'source_url': product.source_url,
+        'title': product.title or '',
+        'description': product.description or '',
+        'internal_reference': product.internal_reference or '',
+        'ean': product.ean or '',
+        'condition': product.condition or '',
+        'condition_comment': product.condition_comment or '',
+        'stock': product.stock if product.stock is not None else 69,
+        'list_price_value': product.list_price_value,
+        'delivery_time': product.delivery_time or '',
+        'delivery_method': product.delivery_method or '',
+        'for_sale': product.for_sale or 'ja',
+        'cost_price': product.cost_price,
+        'shipping_costs': product.shipping_costs,
+        'commission_percentage': product.commission_percentage,
+        'commission_fixed': product.commission_fixed,
+        'commission_amount': product.commission_amount,
+        'margin': product.margin,
+        'main_image': product.main_image or '',
+        'marketplace_participant': product.marketplace_participant or '',
+        'all_images': product.all_images or '',
+    }
+
+
+def product_to_excel_row(product: Product) -> Dict[str, Any]:
+    return {
+        'Productnaam': product.title or '',
+        'Beschrijving': product.description or '',
+        'Interne referentie': product.internal_reference or '',
+        'EAN': product.ean or '',
+        'Conditie': product.condition or '',
+        'Conditie commentaar': product.condition_comment or '',
+        'Voorraad': product.stock if product.stock is not None else 69,
+        'Prijs': product.list_price_value if product.list_price_value is not None else '',
+        'Levertijd': product.delivery_time or '',
+        'Afleverwijze': product.delivery_method or '',
+        'Te koop': product.for_sale or 'ja',
+        'Hoofdafbeelding': product.main_image or '',
+        'Marktdeelnemer': product.marketplace_participant or '',
+        'Additionele afbeeldingen': product.all_images or ''
+    }
+
+
+def update_product_from_form(product: Product, form_data: Dict[str, str]) -> None:
+    field_mapping = {
+        'Productnaam': 'title',
+        'Beschrijving': 'description',
+        'Interne referentie': 'internal_reference',
+        'EAN': 'ean',
+        'Conditie': 'condition',
+        'Conditie commentaar': 'condition_comment',
+        'Voorraad': 'stock',
+        'Prijs': 'list_price_value',
+        'Levertijd': 'delivery_time',
+        'Afleverwijze': 'delivery_method',
+        'Te koop': 'for_sale',
+        'Inkoopprijs': 'cost_price',
+        'Verzendkosten': 'shipping_costs',
+        'Commissie Percentage': 'commission_percentage',
+        'Commissie Vast': 'commission_fixed',
+        'Bol Commissie': 'commission_amount',
+        'Marge': 'margin',
+        'Hoofdafbeelding': 'main_image',
+        'Marktdeelnemer': 'marketplace_participant',
+        'Additionele afbeeldingen': 'all_images'
+    }
+
+    for excel_field, internal_field in field_mapping.items():
+        if excel_field not in form_data:
+            continue
+        value = form_data[excel_field].strip()
+        if internal_field in [
+            'list_price_value',
+            'cost_price',
+            'shipping_costs',
+            'commission_percentage',
+            'commission_fixed',
+            'commission_amount',
+            'margin',
+        ]:
+            try:
+                setattr(product, internal_field, float(value) if value else None)
+            except ValueError:
+                setattr(product, internal_field, None)
+        elif internal_field == 'stock':
+            try:
+                setattr(product, internal_field, int(value) if value else 69)
+            except ValueError:
+                setattr(product, internal_field, 69)
+        else:
+            setattr(product, internal_field, value)
+
+    product.updated_at = datetime.utcnow()
+
+
+def get_user_product(db, product_id: int) -> Optional[Product]:
+    return (
+        db.query(Product)
+        .filter(Product.id == product_id, Product.user_id == g.current_user.id)
+        .first()
+    )
+
+
+def create_draft_product(db, platform: str, source_url: str, product_data: Dict[str, Any]) -> Product:
+    product = Product(
+        user_id=g.current_user.id,
+        platform=platform,
+        source_url=source_url,
+        title=product_data.get('title'),
+        description=product_data.get('description'),
+        internal_reference=product_data.get('internal_reference'),
+        ean=product_data.get('ean'),
+        condition=product_data.get('condition'),
+        condition_comment=product_data.get('condition_comment'),
+        stock=product_data.get('stock'),
+        list_price_value=product_data.get('list_price_value'),
+        delivery_time=product_data.get('delivery_time'),
+        delivery_method=product_data.get('delivery_method'),
+        for_sale=product_data.get('for_sale'),
+        cost_price=product_data.get('cost_price'),
+        shipping_costs=product_data.get('shipping_costs'),
+        commission_percentage=product_data.get('commission_percentage'),
+        commission_fixed=product_data.get('commission_fixed'),
+        commission_amount=product_data.get('commission_amount'),
+        margin=product_data.get('margin'),
+        main_image=product_data.get('main_image'),
+        marketplace_participant=product_data.get('marketplace_participant'),
+        all_images=product_data.get('all_images'),
+        is_draft=True,
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    )
+    db.add(product)
+    db.flush()
+    return product
+
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if g.current_user:
+        return redirect(url_for('home'))
+
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '')
+        if not username or not password:
+            flash('Vul gebruikersnaam en wachtwoord in', 'error')
+            return redirect(url_for('register'))
+
+        db = get_db_session()
+        try:
+            existing = db.query(User).filter(User.username == username).first()
+            if existing:
+                flash('Gebruikersnaam is al in gebruik', 'error')
+                return redirect(url_for('register'))
+            user = User(
+                username=username,
+                password_hash=generate_password_hash(password),
+            )
+            db.add(user)
+            db.commit()
+            session['user_id'] = user.id
+            flash('Account aangemaakt', 'success')
+            return redirect(url_for('home'))
+        finally:
+            db.close()
+
+    return render_template('register.html')
+
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if g.current_user:
+        return redirect(url_for('home'))
+
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '')
+        if not username or not password:
+            flash('Vul gebruikersnaam en wachtwoord in', 'error')
+            return redirect(url_for('login'))
+
+        db = get_db_session()
+        try:
+            user = db.query(User).filter(User.username == username).first()
+            if not user or not check_password_hash(user.password_hash, password):
+                flash('Ongeldige login', 'error')
+                return redirect(url_for('login'))
+            session['user_id'] = user.id
+            flash('Ingelogd', 'success')
+            return redirect(url_for('home'))
+        finally:
+            db.close()
+
+    return render_template('login.html')
+
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('login'))
 @app.route('/printables')
+@login_required
 def printables_index():
     """Printables Scraper hoofdpagina."""
     return render_template('printables_index.html')
 
 
 @app.route('/printables/scrape', methods=['POST'])
+@login_required
 def printables_scrape():
     """Start scrape van Printables URL."""
     url = request.form.get('url', '').strip()
@@ -82,22 +395,30 @@ def printables_scrape():
     try:
         # Scrape product
         product_data = scrape_printables_product(url, headless=HEADLESS)
+        product_data['source_url'] = url
         
-        # Download afbeeldingen naar /static en vervang URLs door serveerbare lokale URLs
+        db = get_db_session()
         try:
-            new_main, new_all = process_images_into_static(
-                product_data.get('main_image', ''),
-                product_data.get('all_images', ''),
-                title=product_data.get('title', ''),
-                ean=f"PR-{int(time.time())}" # Fake EAN/ID voor unieke bestandsnamen
-            )
-            product_data['main_image'] = new_main
-            product_data['all_images'] = new_all
-        except Exception:
-            pass
-        
-        # Zet in session
-        session['current_row'] = product_data
+            product = create_draft_product(db, platform='printables', source_url=url, product_data=product_data)
+            # Download afbeeldingen naar /static en vervang URLs door serveerbare lokale URLs
+            try:
+                new_main, new_all = process_images_into_static(
+                    product_data.get('main_image', ''),
+                    product_data.get('all_images', ''),
+                    title=product_data.get('title', ''),
+                    ean=f"PR-{int(time.time())}",
+                    user_id=g.current_user.id,
+                    product_id=product.id,
+                )
+                product.main_image = new_main
+                product.all_images = new_all
+            except Exception:
+                pass
+            db.commit()
+        finally:
+            db.close()
+
+        session['current_product_id'] = product.id
         # Gebruik de BOL edit flow voor nu, want de velden zijn gemapped
         # Maar we moeten wel weten dat we terug naar printables moeten als we cancelen?
         # Voorlopig linken we naar dezelfde edit pagina, maar die post naar /bol/edit...
@@ -112,158 +433,116 @@ def printables_scrape():
 
 
 @app.route('/printables/edit', methods=['GET', 'POST'])
+@login_required
 def printables_edit():
     """Formulier voor bewerken van Printables data."""
-    if 'current_row' not in session:
+    product_id = session.get('current_product_id')
+    if not product_id:
         flash('Geen data om te bewerken', 'error')
         return redirect(url_for('printables_index'))
-    
-    if request.method == 'POST':
-        # Reuse logic from bol_edit but redirect to printables confirm
-        # ... (kopie van bol_edit logica) ...
-        current_data = session['current_row'].copy()
-        
-        field_mapping = {
-            'Productnaam': 'title',
-            'Beschrijving': 'description', 
-            'Interne referentie': 'internal_reference',
-            'EAN': 'ean',
-            'Conditie': 'condition',
-            'Conditie commentaar': 'condition_comment',
-            'Voorraad': 'stock',
-            'Prijs': 'list_price_value',
-            'Levertijd': 'delivery_time',
-            'Afleverwijze': 'delivery_method',
-            'Te koop': 'for_sale',
-            'Hoofdafbeelding': 'main_image',
-            'Marktdeelnemer': 'marketplace_participant',
-            'Additionele afbeeldingen': 'all_images'
-        }
-        
-        for excel_field, internal_field in field_mapping.items():
-            if excel_field in request.form:
-                value = request.form[excel_field].strip()
-                if internal_field == 'list_price_value':
-                    try:
-                        current_data[internal_field] = float(value) if value else None
-                    except ValueError:
-                        current_data[internal_field] = None
-                elif internal_field == 'stock':
-                    try:
-                        current_data[internal_field] = int(value) if value else 69
-                    except ValueError:
-                        current_data[internal_field] = 69
-                else:
-                    current_data[internal_field] = value
-        
-        session['current_row'] = current_data
-        return redirect(url_for('printables_confirm'))
-    
-    # We gebruiken een specifieke template of hergebruiken edit.html met een flag
-    return render_template('edit.html', data=session['current_row'], platform='printables')
+
+    db = get_db_session()
+    try:
+        product = get_user_product(db, product_id)
+        if not product:
+            flash('Geen data om te bewerken', 'error')
+            return redirect(url_for('printables_index'))
+
+        if request.method == 'POST':
+            update_product_from_form(product, request.form)
+            db.commit()
+            return redirect(url_for('printables_confirm'))
+
+        return render_template('edit.html', data=product_to_internal_data(product), platform='printables')
+    finally:
+        db.close()
 
 
 @app.route('/printables/confirm', methods=['GET', 'POST'])
+@login_required
 def printables_confirm():
-    if 'current_row' not in session:
+    product_id = session.get('current_product_id')
+    if not product_id:
         flash('Geen data om te bevestigen', 'error')
         return redirect(url_for('printables_index'))
-    
-    if request.method == 'POST':
-        try:
-            if 'editing_row_index' in session:
-                update_excel_row(session['editing_row_index'], session['current_row'])
-                flash('Product bijgewerkt!', 'success')
-                session.pop('editing_row_index', None)
-                return redirect(url_for('printables_rows'))
-            else:
-                append_to_excel(session['current_row'])
-                flash('Product opgeslagen in Excel!', 'success')
-                return redirect(url_for('printables_index'))
-            session.pop('current_row', None)
-        except Exception as e:
-            flash(f'Opslaan fout: {str(e)}', 'error')
-    
-    return render_template('confirm.html', data=session['current_row'], platform='printables')
+
+    db = get_db_session()
+    try:
+        product = get_user_product(db, product_id)
+        if not product:
+            flash('Geen data om te bevestigen', 'error')
+            return redirect(url_for('printables_index'))
+
+        if request.method == 'POST':
+            was_draft = product.is_draft
+            product.is_draft = False
+            product.updated_at = datetime.utcnow()
+            db.commit()
+            session.pop('current_product_id', None)
+            flash('Product opgeslagen!', 'success')
+            return redirect(url_for('printables_index' if was_draft else 'printables_rows'))
+
+        return render_template('confirm.html', data=product_to_internal_data(product), platform='printables')
+    finally:
+        db.close()
 
 
 @app.route('/printables/rows')
+@login_required
 def printables_rows():
     """Overzicht rijen (gedeelde Excel)."""
     # Reuse bol logic but render with platform='printables' for back links
+    db = get_db_session()
     try:
-        df = get_excel_data()
-        df = df.dropna(how='all')
-        rows_data = df.to_dict('records')
-        for row in rows_data:
-             for col in EXCEL_COLUMNS:
-                if col not in row or pd.isna(row[col]):
-                    row[col] = ''
-                elif col == 'Prijs':
-                    if pd.isna(row[col]) or row[col] == '':
-                        row[col] = ''
-                    elif isinstance(row[col], (int, float)):
-                        row[col] = float(row[col])
-                    else:
-                        try:
-                            row[col] = float(str(row[col]).replace(',', '.'))
-                        except:
-                            row[col] = ''
-                elif isinstance(row[col], (int, float)) and not isinstance(row[col], bool):
-                    if pd.isna(row[col]):
-                        row[col] = ''
-                    else:
-                        row[col] = str(row[col])
-                        
+        products = (
+            db.query(Product)
+            .filter(Product.user_id == g.current_user.id, Product.is_draft.is_(False))
+            .order_by(Product.created_at.desc())
+            .all()
+        )
+        rows_data = []
+        for product in products:
+            row = product_to_excel_row(product)
+            row['product_id'] = product.id
+            rows_data.append(row)
+
         return render_template('rows.html', rows=rows_data, platform='printables')
     except Exception as e:
         flash(f'Fout: {str(e)}', 'error')
         return redirect(url_for('printables_index'))
+    finally:
+        db.close()
         
         
-@app.route('/printables/edit_row/<int:row_index>')
-def printables_edit_row(row_index):
-    # Reuse logic
+@app.route('/printables/edit_row/<int:product_id>')
+@login_required
+def printables_edit_row(product_id):
+    db = get_db_session()
     try:
-        df = get_excel_data()
-        if row_index >= len(df):
+        product = get_user_product(db, product_id)
+        if not product:
             return redirect(url_for('printables_rows'))
-        row_data = df.iloc[row_index].to_dict()
-        internal_data = {
-            'title': row_data.get('Productnaam', ''),
-            'description': row_data.get('Beschrijving', ''),
-            'internal_reference': row_data.get('Interne referentie', ''),
-            'ean': row_data.get('EAN', ''),
-            'condition': row_data.get('Conditie', ''),
-            'condition_comment': row_data.get('Conditie commentaar', ''),
-            'stock': row_data.get('Voorraad', 69),
-            'list_price_value': row_data.get('Prijs', None),
-            'delivery_time': row_data.get('Levertijd', ''),
-            'delivery_method': row_data.get('Afleverwijze', ''),
-            'for_sale': row_data.get('Te koop', 'ja'),
-            'main_image': row_data.get('Hoofdafbeelding', ''),
-            'marketplace_participant': row_data.get('Marktdeelnemer', ''),
-            'all_images': row_data.get('Additionele afbeeldingen', '')
-        }
-        session['current_row'] = internal_data
-        session['editing_row_index'] = row_index
+        session['current_product_id'] = product.id
         return redirect(url_for('printables_edit'))
-    except Exception as e:
-         return redirect(url_for('printables_rows'))
+    finally:
+        db.close()
 
-@app.route('/printables/delete_row/<int:row_index>')
-def printables_delete_row(row_index):
+@app.route('/printables/delete_row/<int:product_id>')
+@login_required
+def printables_delete_row(product_id):
+    db = get_db_session()
     try:
-        df = get_excel_data()
-        if row_index < len(df):
-            df = df.drop(df.index[row_index])
-            df.to_excel(OUTPUT_EXCEL, index=False)
+        product = get_user_product(db, product_id)
+        if product:
+            db.delete(product)
+            db.commit()
             flash('Verwijderd', 'success')
         return redirect(url_for('printables_rows'))
-    except:
-        return redirect(url_for('printables_rows'))
+    finally:
+        db.close()
         
 @app.route('/printables/export')
+@login_required
 def printables_export():
     return bol_export() # Reuse export logic
 
@@ -359,7 +638,14 @@ def build_image_filename(title: str, ean: str, index: int, ext: str, source_url:
     return filename
 
 
-def download_image_to_static(source_url: str, title: str, ean: str, index: int) -> Optional[str]:
+def download_image_to_static(
+    source_url: str,
+    title: str,
+    ean: str,
+    index: int,
+    user_id: int,
+    product_id: int,
+) -> Optional[str]:
     """Download afbeelding en sla op in static, return serveerbare URL (/static/...)."""
     if not is_valid_image_source_url(source_url):
         return None
@@ -379,7 +665,9 @@ def download_image_to_static(source_url: str, title: str, ean: str, index: int) 
         return None
 
     filename = build_image_filename(title, ean, index, ext, source_url)
-    abs_path = os.path.join(STATIC_IMAGES_DIR, filename)
+    product_dir = os.path.join(STATIC_IMAGES_DIR, str(user_id), str(product_id))
+    os.makedirs(product_dir, exist_ok=True)
+    abs_path = os.path.join(product_dir, filename)
     try:
         with open(abs_path, 'wb') as f:
             f.write(data)
@@ -387,13 +675,20 @@ def download_image_to_static(source_url: str, title: str, ean: str, index: int) 
         return None
 
     # Bouw publieke/serveerbare URL (zonder spaties, eindigt op .jpg/.png)
-    rel_path = f"/static/images/products/{filename}"
-    # Gebruik PUBLIC_BASE_URL of fallback naar localhost:5001 (nooit relatieve paden)
-    base = PUBLIC_BASE_URL if PUBLIC_BASE_URL else "http://localhost:5001"
+    rel_path = f"/static/images/products/{user_id}/{product_id}/{filename}"
+    # Gebruik PUBLIC_BASE_URL of fallback naar localhost:5002 (nooit relatieve paden)
+    base = PUBLIC_BASE_URL if PUBLIC_BASE_URL else "http://localhost:5002"
     return f"{base}{rel_path}"
 
 
-def process_images_into_static(main_image_url: str, all_images_concat: str, title: str, ean: str) -> Tuple[str, str]:
+def process_images_into_static(
+    main_image_url: str,
+    all_images_concat: str,
+    title: str,
+    ean: str,
+    user_id: int,
+    product_id: int,
+) -> Tuple[str, str]:
     """Download hoofd- en additionele afbeeldingen en return lokale URLs (gescheiden door |)."""
     urls: List[str] = []
     if main_image_url:
@@ -411,7 +706,14 @@ def process_images_into_static(main_image_url: str, all_images_concat: str, titl
 
     stored_urls: List[str] = []
     for i, src in enumerate(ordered_urls):
-        stored = download_image_to_static(src, title=title or 'product', ean=ean or '', index=i)
+        stored = download_image_to_static(
+            src,
+            title=title or 'product',
+            ean=ean or '',
+            index=i,
+            user_id=user_id,
+            product_id=product_id,
+        )
         if stored:
             stored_urls.append(stored)
 
@@ -420,111 +722,23 @@ def process_images_into_static(main_image_url: str, all_images_concat: str, titl
     return new_main, new_all
 
 
-def ensure_excel_exists() -> None:
-    """Zorg dat Excel bestand bestaat met juiste kolommen."""
-    # Gebruik altijd het template bestand
-    template_file = 'Export_generic_template_20251004_07 PM052.xlsx'
-    if os.path.exists(template_file):
-        # Kopieer template naar output bestand als het nog niet bestaat
-        if not os.path.exists(OUTPUT_EXCEL):
-            import shutil
-            shutil.copy2(template_file, OUTPUT_EXCEL)
-
-
-def map_data_to_excel_columns(data: Dict[str, Any]) -> Dict[str, Any]:
-    """Map onze data naar Excel kolom namen."""
-    return {
-        'Productnaam': data.get('title', ''),
-        'Beschrijving': data.get('description', ''),
-        'Interne referentie': data.get('internal_reference', ''),
-        'EAN': data.get('ean', ''),
-        'Conditie': data.get('condition', ''),
-        'Conditie commentaar': data.get('condition_comment', ''),
-        'Voorraad': data.get('stock', 69),
-        'Prijs': data.get('list_price_value', None),
-        'Levertijd': data.get('delivery_time', ''),
-        'Afleverwijze': data.get('delivery_method', ''),
-        'Te koop': data.get('for_sale', 'ja'),
-        'Hoofdafbeelding': data.get('main_image', ''),
-        'Marktdeelnemer': data.get('marketplace_participant', ''),
-        'Additionele afbeeldingen': data.get('all_images', '')
-    }
-
-
-def append_to_excel(data: Dict[str, Any]) -> None:
-    """Append data naar Excel bestand."""
-    ensure_excel_exists()
-    
-    # Map data naar Excel kolommen
-    excel_data = map_data_to_excel_columns(data)
-    
-    # Maak DataFrame van data
-    df_new = pd.DataFrame([excel_data])
-    
-    # Lees bestaande data
-    df_existing = pd.read_excel(OUTPUT_EXCEL)
-    
-    # Combineer en schrijf terug
-    df_combined = pd.concat([df_existing, df_new], ignore_index=True)
-    df_combined.to_excel(OUTPUT_EXCEL, index=False)
-
-
-def update_excel_row(row_index: int, data: Dict[str, Any]) -> None:
-    """Update een bestaande rij in Excel bestand."""
-    # Map data naar Excel kolommen
-    excel_data = map_data_to_excel_columns(data)
-    
-    # Lees bestaande data
-    df = pd.read_excel(OUTPUT_EXCEL)
-    
-    # Update de specifieke rij
-    for col, value in excel_data.items():
-        if col in df.columns:
-            df.at[row_index, col] = value
-    
-    # Schrijf terug
-    df.to_excel(OUTPUT_EXCEL, index=False)
-
-
-def get_excel_data() -> pd.DataFrame:
-    """Lees alle data uit Excel bestand."""
-    if not os.path.exists(OUTPUT_EXCEL):
-        return pd.DataFrame(columns=EXCEL_COLUMNS)
-    
-    df = pd.read_excel(OUTPUT_EXCEL)
-    
-    # Filter alleen de gewenste kolommen en verwijder oude kolommen
-    if all(col in df.columns for col in EXCEL_COLUMNS):
-        df = df[EXCEL_COLUMNS]
-    else:
-        # Maak nieuwe DataFrame met alleen gewenste kolommen
-        df_clean = pd.DataFrame(columns=EXCEL_COLUMNS)
-        for col in EXCEL_COLUMNS:
-            if col in df.columns:
-                df_clean[col] = df[col]
-            else:
-                df_clean[col] = ''
-        df = df_clean
-    
-    # Vervang NaN waarden met lege strings
-    df = df.fillna('')
-    
-    return df
-
 
 @app.route('/')
+@login_required
 def home():
     """Nieuwe home pagina met scraper selectie."""
     return render_template('home.html')
 
 
 @app.route('/bol')
+@login_required
 def bol_index():
     """Bol.com Scraper hoofdpagina."""
     return render_template('bol_index.html')
 
 
 @app.route('/bol/scrape', methods=['POST'])
+@login_required
 def bol_scrape():
     """Start scrape van bol.com URL."""
     incoming = request.form.get('url', '').strip()
@@ -541,7 +755,8 @@ def bol_scrape():
     try:
         # Scrape product
         product_data = scrape_bol_product(url, headless=HEADLESS)
-        
+        product_data['source_url'] = url
+
         # Voeg standaard waarden toe voor nieuwe velden
         product_data['condition'] = 'nieuw'
         product_data['condition_comment'] = ''
@@ -552,269 +767,177 @@ def bol_scrape():
         product_data['for_sale'] = 'ja'
         product_data['marketplace_participant'] = ''
 
-        # Download afbeeldingen naar /static en vervang URLs door serveerbare lokale URLs
+        db = get_db_session()
         try:
-            new_main, new_all = process_images_into_static(
-                product_data.get('main_image', ''),
-                product_data.get('all_images', ''),
-                title=product_data.get('title', ''),
-                ean=product_data.get('ean', '')
-            )
-            product_data['main_image'] = new_main
-            product_data['all_images'] = new_all
-        except Exception:
-            # Bij fout: laat originele URLs staan
-            pass
-        
-        # Zet in session
-        session['current_row'] = product_data
-        
+            product = create_draft_product(db, platform='bol', source_url=url, product_data=product_data)
+            # Download afbeeldingen naar /static en vervang URLs door serveerbare lokale URLs
+            try:
+                new_main, new_all = process_images_into_static(
+                    product_data.get('main_image', ''),
+                    product_data.get('all_images', ''),
+                    title=product_data.get('title', ''),
+                    ean=product_data.get('ean', ''),
+                    user_id=g.current_user.id,
+                    product_id=product.id,
+                )
+                product.main_image = new_main
+                product.all_images = new_all
+            except Exception:
+                # Bij fout: laat originele URLs staan
+                pass
+            db.commit()
+        finally:
+            db.close()
+
+        session['current_product_id'] = product.id
         return redirect(url_for('bol_edit'))
-        
+
     except Exception as e:
         flash(f'Scrape fout: {str(e)}', 'error')
         return redirect(url_for('bol_index'))
 
 
 @app.route('/bol/edit', methods=['GET', 'POST'])
+@login_required
 def bol_edit():
     """Formulier voor bewerken van gescrapete data."""
-    if 'current_row' not in session:
+    product_id = session.get('current_product_id')
+    if not product_id:
         flash('Geen data om te bewerken', 'error')
         return redirect(url_for('bol_index'))
-    
-    if request.method == 'POST':
-        # Update session data met formulier data
-        current_data = session['current_row'].copy()
-        
-        # Map Excel kolommen naar onze interne veld namen
-        field_mapping = {
-            'Productnaam': 'title',
-            'Beschrijving': 'description', 
-            'Interne referentie': 'internal_reference',
-            'EAN': 'ean',
-            'Conditie': 'condition',
-            'Conditie commentaar': 'condition_comment',
-            'Voorraad': 'stock',
-            'Prijs': 'list_price_value',
-            'Levertijd': 'delivery_time',
-            'Afleverwijze': 'delivery_method',
-            'Te koop': 'for_sale',
-            'Inkoopprijs': 'cost_price',
-            'Verzendkosten': 'shipping_costs',
-            'Commissie Percentage': 'commission_percentage',
-            'Commissie Vast': 'commission_fixed',
-            'Bol Commissie': 'commission_amount',
-            'Marge': 'margin',
-            'Hoofdafbeelding': 'main_image',
-            'Marktdeelnemer': 'marketplace_participant',
-            'Additionele afbeeldingen': 'all_images'
-        }
-        
-        for excel_field, internal_field in field_mapping.items():
-            if excel_field in request.form:
-                value = request.form[excel_field].strip()
-                
-                # Speciale behandeling voor numerieke velden
-                if internal_field in ['list_price_value', 'cost_price', 'shipping_costs', 'commission_percentage', 'commission_fixed', 'commission_amount', 'margin']:
-                    try:
-                        current_data[internal_field] = float(value) if value else None
-                    except ValueError:
-                        current_data[internal_field] = None
-                elif internal_field == 'stock':
-                    try:
-                        current_data[internal_field] = int(value) if value else 69
-                    except ValueError:
-                        current_data[internal_field] = 69
-                else:
-                    current_data[internal_field] = value
-        
-        session['current_row'] = current_data
-        return redirect(url_for('bol_confirm'))
-    
-    # GET: toon formulier
-    return render_template('edit.html', data=session['current_row'])
+
+    db = get_db_session()
+    try:
+        product = get_user_product(db, product_id)
+        if not product:
+            flash('Geen data om te bewerken', 'error')
+            return redirect(url_for('bol_index'))
+
+        if request.method == 'POST':
+            update_product_from_form(product, request.form)
+            db.commit()
+            return redirect(url_for('bol_confirm'))
+
+        return render_template('edit.html', data=product_to_internal_data(product), platform='bol')
+    finally:
+        db.close()
 
 
 @app.route('/bol/confirm', methods=['GET', 'POST'])
+@login_required
 def bol_confirm():
     """Bevestigingspagina met data overzicht."""
-    if 'current_row' not in session:
+    product_id = session.get('current_product_id')
+    if not product_id:
         flash('Geen data om te bevestigen', 'error')
         return redirect(url_for('bol_index'))
-    
-    if request.method == 'POST':
-        # Sla op in Excel
-        try:
-            # Check of we een bestaande rij bewerken
-            if 'editing_row_index' in session:
-                # Update bestaande rij
-                update_excel_row(session['editing_row_index'], session['current_row'])
-                flash('Product bijgewerkt!', 'success')
-                session.pop('editing_row_index', None)
-                return redirect(url_for('bol_rows'))
-            else:
-                # Nieuwe rij toevoegen
-                append_to_excel(session['current_row'])
-                flash('Product opgeslagen in Excel!', 'success')
-                return redirect(url_for('bol_index'))
-            
-            # Clear session
-            session.pop('current_row', None)
-            
-        except Exception as e:
-            flash(f'Opslaan fout: {str(e)}', 'error')
-    
-    # GET: toon data overzicht
-    return render_template('confirm.html', data=session['current_row'])
+
+    db = get_db_session()
+    try:
+        product = get_user_product(db, product_id)
+        if not product:
+            flash('Geen data om te bevestigen', 'error')
+            return redirect(url_for('bol_index'))
+
+        if request.method == 'POST':
+            was_draft = product.is_draft
+            product.is_draft = False
+            product.updated_at = datetime.utcnow()
+            db.commit()
+            session.pop('current_product_id', None)
+            flash('Product opgeslagen!', 'success')
+            return redirect(url_for('bol_index' if was_draft else 'bol_rows'))
+
+        return render_template('confirm.html', data=product_to_internal_data(product), platform='bol')
+    finally:
+        db.close()
 
 
 @app.route('/bol/rows')
+@login_required
 def bol_rows():
     """Overzicht van alle opgeslagen rijen."""
+    db = get_db_session()
     try:
-        df = get_excel_data()
-        
-        # Filter lege rijen (alleen rijen met echte data)
-        df = df.dropna(how='all')
-        
-        # Converteer naar dict lijst voor template
-        rows_data = df.to_dict('records')
-        
-        # Zorg dat elke rij alle verwachte velden heeft en geen NaN waarden
-        for row in rows_data:
-            for col in EXCEL_COLUMNS:
-                if col not in row or pd.isna(row[col]):
-                    row[col] = ''
-                # Speciale behandeling voor prijs velden
-                elif col == 'Prijs':
-                    if pd.isna(row[col]) or row[col] == '':
-                        row[col] = ''
-                    elif isinstance(row[col], (int, float)):
-                        row[col] = float(row[col])  # Behoud als float voor formatting
-                    else:
-                        try:
-                            row[col] = float(str(row[col]).replace(',', '.'))
-                        except (ValueError, TypeError):
-                            row[col] = ''
-                # Converteer andere velden naar string om slicing problemen te voorkomen
-                elif isinstance(row[col], (int, float)) and not isinstance(row[col], bool):
-                    if pd.isna(row[col]):
-                        row[col] = ''
-                    else:
-                        row[col] = str(row[col])
-        
-        # Debug info
-        print(f"DEBUG: Aantal rijen gevonden: {len(rows_data)}")
-        if len(rows_data) > 0:
-            print(f"DEBUG: Eerste rij: {rows_data[0]}")
-        
+        products = (
+            db.query(Product)
+            .filter(Product.user_id == g.current_user.id, Product.is_draft.is_(False))
+            .order_by(Product.created_at.desc())
+            .all()
+        )
+        rows_data = []
+        for product in products:
+            row = product_to_excel_row(product)
+            row['product_id'] = product.id
+            rows_data.append(row)
         return render_template('rows.html', rows=rows_data)
     except Exception as e:
         print(f"DEBUG: Fout in rows functie: {str(e)}")
         flash(f'Fout bij laden data: {str(e)}', 'error')
         return redirect(url_for('bol_index'))
+    finally:
+        db.close()
 
 
-@app.route('/bol/edit_row/<int:row_index>')
-def bol_edit_row(row_index):
+@app.route('/bol/edit_row/<int:product_id>')
+@login_required
+def bol_edit_row(product_id):
     """Bewerk een bestaande rij."""
+    db = get_db_session()
     try:
-        df = get_excel_data()
-        
-        if row_index >= len(df):
+        product = get_user_product(db, product_id)
+        if not product:
             flash('Rij niet gevonden', 'error')
             return redirect(url_for('bol_rows'))
-        
-        # Haal de rij data op
-        row_data = df.iloc[row_index].to_dict()
-        
-        # Converteer naar interne format
-        internal_data = {
-            'title': row_data.get('Productnaam', ''),
-            'description': row_data.get('Beschrijving', ''),
-            'internal_reference': row_data.get('Interne referentie', ''),
-            'ean': row_data.get('EAN', ''),
-            'condition': row_data.get('Conditie', ''),
-            'condition_comment': row_data.get('Conditie commentaar', ''),
-            'stock': row_data.get('Voorraad', 69),
-            'list_price_value': row_data.get('Prijs', None),
-            'delivery_time': row_data.get('Levertijd', ''),
-            'delivery_method': row_data.get('Afleverwijze', ''),
-            'for_sale': row_data.get('Te koop', 'ja'),
-            'cost_price': row_data.get('Inkoopprijs', None),
-            'shipping_costs': row_data.get('Verzendkosten', None),
-            'commission_percentage': row_data.get('Commissie Percentage', None),
-            'commission_fixed': row_data.get('Commissie Vast', None),
-            'commission_amount': row_data.get('Bol Commissie', None),
-            'margin': row_data.get('Marge', None),
-            'main_image': row_data.get('Hoofdafbeelding', ''),
-            'marketplace_participant': row_data.get('Marktdeelnemer', ''),
-            'all_images': row_data.get('Additionele afbeeldingen', '')
-        }
-        
-        # Zet in session met row index voor update
-        session['current_row'] = internal_data
-        session['editing_row_index'] = row_index
-        
+        session['current_product_id'] = product.id
         return redirect(url_for('bol_edit'))
-        
-    except Exception as e:
-        flash(f'Fout bij laden rij: {str(e)}', 'error')
-        return redirect(url_for('bol_rows'))
+    finally:
+        db.close()
 
 
-@app.route('/bol/delete_row/<int:row_index>')
-def bol_delete_row(row_index):
+@app.route('/bol/delete_row/<int:product_id>')
+@login_required
+def bol_delete_row(product_id):
     """Verwijder een rij."""
+    db = get_db_session()
     try:
-        df = get_excel_data()
-        
-        if row_index >= len(df):
+        product = get_user_product(db, product_id)
+        if not product:
             flash('Rij niet gevonden', 'error')
             return redirect(url_for('bol_rows'))
-        
-        # Verwijder de rij
-        df = df.drop(df.index[row_index])
-        
-        # Schrijf terug naar Excel
-        df.to_excel(OUTPUT_EXCEL, index=False)
-        
+        db.delete(product)
+        db.commit()
         flash('Product verwijderd!', 'success')
         return redirect(url_for('bol_rows'))
-        
-    except Exception as e:
-        flash(f'Fout bij verwijderen: {str(e)}', 'error')
-        return redirect(url_for('bol_rows'))
+    finally:
+        db.close()
 
 
 @app.route('/bol/export')
+@login_required
 def bol_export():
     """Download Excel bestand."""
+    db = get_db_session()
     try:
-        # Lees alleen het output bestand, niet het template
-        if os.path.exists(OUTPUT_EXCEL):
-            df = pd.read_excel(OUTPUT_EXCEL)
-        else:
-            # Maak lege DataFrame met juiste kolommen
-            df = pd.DataFrame(columns=EXCEL_COLUMNS)
-        
-        # Filter alleen de gewenste kolommen en verwijder oude kolommen
-        df_clean = df[EXCEL_COLUMNS] if all(col in df.columns for col in EXCEL_COLUMNS) else pd.DataFrame(columns=EXCEL_COLUMNS)
-        
-        # Zorg dat alle verwachte kolommen bestaan
+        products = (
+            db.query(Product)
+            .filter(Product.user_id == g.current_user.id, Product.is_draft.is_(False))
+            .order_by(Product.created_at.desc())
+            .all()
+        )
+        rows = [product_to_excel_row(product) for product in products]
+        df_clean = pd.DataFrame(rows, columns=EXCEL_COLUMNS)
+
         for col in EXCEL_COLUMNS:
             if col not in df_clean.columns:
                 df_clean[col] = ''
-        
-        # Vervang NaN waarden met lege strings
+
         df_clean = df_clean.fillna('')
-        
-        # Maak in-memory stream
+
         output = io.BytesIO()
         df_clean.to_excel(output, index=False, engine='openpyxl')
         output.seek(0)
-        
+
         return send_file(
             output,
             as_attachment=True,
@@ -824,15 +947,19 @@ def bol_export():
     except Exception as e:
         flash(f'Export fout: {str(e)}', 'error')
         return redirect(url_for('bol_index'))
+    finally:
+        db.close()
 
 
 @app.route('/amazon')
+@login_required
 def amazon_index():
     """Amazon Scraper hoofdpagina."""
     return render_template('amazon_index.html')
 
 
 @app.route('/amazon/scrape', methods=['POST'])
+@login_required
 def amazon_scrape():
     """Start scrape van Amazon URL."""
     url = request.form.get('url', '').strip()
@@ -849,6 +976,7 @@ def amazon_scrape():
     try:
         # Scrape product
         product_data = scrape_amazon_product(url, headless=HEADLESS)
+        product_data['source_url'] = url
         
         # Voeg standaard waarden toe
         product_data['condition'] = 'nieuw'
@@ -893,22 +1021,28 @@ def amazon_scrape():
         
         product_data['list_price_value'] = None # Reset selling price so user can calculate it
 
-        # Download afbeeldingen
+        db = get_db_session()
         try:
-            new_main, new_all = process_images_into_static(
-                product_data.get('main_image', ''),
-                product_data.get('all_images', ''),
-                title=product_data.get('title', ''),
-                ean=product_data.get('ean', '') or f"AMZ-{int(time.time())}"
-            )
-            product_data['main_image'] = new_main
-            product_data['all_images'] = new_all
-        except Exception:
-            pass
-        
-        # Zet in session
-        session['current_row'] = product_data
-        
+            product = create_draft_product(db, platform='amazon', source_url=url, product_data=product_data)
+            # Download afbeeldingen
+            try:
+                new_main, new_all = process_images_into_static(
+                    product_data.get('main_image', ''),
+                    product_data.get('all_images', ''),
+                    title=product_data.get('title', ''),
+                    ean=product_data.get('ean', '') or f"AMZ-{int(time.time())}",
+                    user_id=g.current_user.id,
+                    product_id=product.id,
+                )
+                product.main_image = new_main
+                product.all_images = new_all
+            except Exception:
+                pass
+            db.commit()
+        finally:
+            db.close()
+
+        session['current_product_id'] = product.id
         return redirect(url_for('amazon_edit'))
         
     except Exception as e:
@@ -917,181 +1051,122 @@ def amazon_scrape():
 
 
 @app.route('/amazon/edit', methods=['GET', 'POST'])
+@login_required
 def amazon_edit():
     """Formulier voor bewerken van Amazon data."""
-    if 'current_row' not in session:
+    product_id = session.get('current_product_id')
+    if not product_id:
         flash('Geen data om te bewerken', 'error')
         return redirect(url_for('amazon_index'))
-    
-    if request.method == 'POST':
-        current_data = session['current_row'].copy()
-        
-        field_mapping = {
-            'Productnaam': 'title',
-            'Beschrijving': 'description', 
-            'Interne referentie': 'internal_reference',
-            'EAN': 'ean',
-            'Conditie': 'condition',
-            'Conditie commentaar': 'condition_comment',
-            'Voorraad': 'stock',
-            'Prijs': 'list_price_value',
-            'Levertijd': 'delivery_time',
-            'Afleverwijze': 'delivery_method',
-            'Te koop': 'for_sale',
-            'Inkoopprijs': 'cost_price',
-            'Verzendkosten': 'shipping_costs',
-            'Commissie Percentage': 'commission_percentage',
-            'Commissie Vast': 'commission_fixed',
-            'Bol Commissie': 'commission_amount',
-            'Marge': 'margin',
-            'Hoofdafbeelding': 'main_image',
-            'Marktdeelnemer': 'marketplace_participant',
-            'Additionele afbeeldingen': 'all_images'
-        }
-        
-        for excel_field, internal_field in field_mapping.items():
-            if excel_field in request.form:
-                value = request.form[excel_field].strip()
-                
-                # Speciale behandeling voor numerieke velden
-                if internal_field in ['list_price_value', 'cost_price', 'shipping_costs', 'commission_percentage', 'commission_fixed', 'commission_amount', 'margin']:
-                    try:
-                        current_data[internal_field] = float(value) if value else None
-                    except ValueError:
-                        current_data[internal_field] = None
-                elif internal_field == 'stock':
-                    try:
-                        current_data[internal_field] = int(value) if value else 69
-                    except ValueError:
-                        current_data[internal_field] = 69
-                else:
-                    current_data[internal_field] = value
-        
-        session['current_row'] = current_data
-        return redirect(url_for('amazon_confirm'))
-    
-    return render_template('edit.html', data=session['current_row'], platform='amazon')
+
+    db = get_db_session()
+    try:
+        product = get_user_product(db, product_id)
+        if not product:
+            flash('Geen data om te bewerken', 'error')
+            return redirect(url_for('amazon_index'))
+
+        if request.method == 'POST':
+            update_product_from_form(product, request.form)
+            db.commit()
+            return redirect(url_for('amazon_confirm'))
+
+        return render_template('edit.html', data=product_to_internal_data(product), platform='amazon')
+    finally:
+        db.close()
 
 
 @app.route('/amazon/confirm', methods=['GET', 'POST'])
+@login_required
 def amazon_confirm():
-    if 'current_row' not in session:
+    product_id = session.get('current_product_id')
+    if not product_id:
         flash('Geen data om te bevestigen', 'error')
         return redirect(url_for('amazon_index'))
-    
-    if request.method == 'POST':
-        try:
-            if 'editing_row_index' in session:
-                update_excel_row(session['editing_row_index'], session['current_row'])
-                flash('Product bijgewerkt!', 'success')
-                session.pop('editing_row_index', None)
-                return redirect(url_for('amazon_rows'))
-            else:
-                append_to_excel(session['current_row'])
-                flash('Product opgeslagen in Excel!', 'success')
-                return redirect(url_for('amazon_index'))
-            session.pop('current_row', None)
-        except Exception as e:
-            flash(f'Opslaan fout: {str(e)}', 'error')
-    
-    return render_template('confirm.html', data=session['current_row'], platform='amazon')
+
+    db = get_db_session()
+    try:
+        product = get_user_product(db, product_id)
+        if not product:
+            flash('Geen data om te bevestigen', 'error')
+            return redirect(url_for('amazon_index'))
+
+        if request.method == 'POST':
+            was_draft = product.is_draft
+            product.is_draft = False
+            product.updated_at = datetime.utcnow()
+            db.commit()
+            session.pop('current_product_id', None)
+            flash('Product opgeslagen!', 'success')
+            return redirect(url_for('amazon_index' if was_draft else 'amazon_rows'))
+
+        return render_template('confirm.html', data=product_to_internal_data(product), platform='amazon')
+    finally:
+        db.close()
 
 
 @app.route('/amazon/rows')
+@login_required
 def amazon_rows():
     """Overzicht rijen (Amazon)."""
-    return bol_rows() # Re-use bol_rows logic, but ensure template knows it's amazon if needed for links?
-    # bol_rows uses 'bol_rows' template logic or similar. 
-    # Actually, bol_rows renders 'rows.html' which might need a platform var.
-    # Let's inspect bol_rows again. It renders 'rows.html'.
-    # We should probably copy the logic to pass platform='amazon' to rows.html so back buttons work
+    db = get_db_session()
     try:
-        df = get_excel_data()
-        df = df.dropna(how='all')
-        rows_data = df.to_dict('records')
-        
-        for row in rows_data:
-            for col in EXCEL_COLUMNS:
-                if col not in row or pd.isna(row[col]):
-                    row[col] = ''
-                elif col == 'Prijs':
-                    if pd.isna(row[col]) or row[col] == '':
-                        row[col] = ''
-                    elif isinstance(row[col], (int, float)):
-                        row[col] = float(row[col])
-                    else:
-                        try:
-                            row[col] = float(str(row[col]).replace(',', '.'))
-                        except:
-                            row[col] = ''
-                elif isinstance(row[col], (int, float)) and not isinstance(row[col], bool):
-                    if pd.isna(row[col]):
-                        row[col] = ''
-                    else:
-                        row[col] = str(row[col])
-                        
+        products = (
+            db.query(Product)
+            .filter(Product.user_id == g.current_user.id, Product.is_draft.is_(False))
+            .order_by(Product.created_at.desc())
+            .all()
+        )
+        rows_data = []
+        for product in products:
+            row = product_to_excel_row(product)
+            row['product_id'] = product.id
+            rows_data.append(row)
         return render_template('rows.html', rows=rows_data, platform='amazon')
     except Exception as e:
         flash(f'Fout: {str(e)}', 'error')
         return redirect(url_for('amazon_index'))
+    finally:
+        db.close()
 
 
-@app.route('/amazon/edit_row/<int:row_index>')
-def amazon_edit_row(row_index):
-    # Reuse logic
+@app.route('/amazon/edit_row/<int:product_id>')
+@login_required
+def amazon_edit_row(product_id):
+    db = get_db_session()
     try:
-        df = get_excel_data()
-        if row_index >= len(df):
+        product = get_user_product(db, product_id)
+        if not product:
             return redirect(url_for('amazon_rows'))
-        row_data = df.iloc[row_index].to_dict()
-        internal_data = {
-            'title': row_data.get('Productnaam', ''),
-            'description': row_data.get('Beschrijving', ''),
-            'internal_reference': row_data.get('Interne referentie', ''),
-            'ean': row_data.get('EAN', ''),
-            'condition': row_data.get('Conditie', ''),
-            'condition_comment': row_data.get('Conditie commentaar', ''),
-            'stock': row_data.get('Voorraad', 69),
-            'list_price_value': row_data.get('Prijs', None),
-            'delivery_time': row_data.get('Levertijd', ''),
-            'delivery_method': row_data.get('Afleverwijze', ''),
-            'for_sale': row_data.get('Te koop', 'ja'),
-            'cost_price': row_data.get('Inkoopprijs', None),
-            'shipping_costs': row_data.get('Verzendkosten', None),
-            'commission_percentage': row_data.get('Commissie Percentage', None),
-            'commission_fixed': row_data.get('Commissie Vast', None),
-            'commission_amount': row_data.get('Bol Commissie', None),
-            'margin': row_data.get('Marge', None),
-            'main_image': row_data.get('Hoofdafbeelding', ''),
-            'marketplace_participant': row_data.get('Marktdeelnemer', ''),
-            'all_images': row_data.get('Additionele afbeeldingen', '')
-        }
-        session['current_row'] = internal_data
-        session['editing_row_index'] = row_index
+        session['current_product_id'] = product.id
         return redirect(url_for('amazon_edit'))
-    except Exception as e:
-         return redirect(url_for('amazon_rows'))
+    finally:
+        db.close()
 
 
-@app.route('/amazon/delete_row/<int:row_index>')
-def amazon_delete_row(row_index):
+@app.route('/amazon/delete_row/<int:product_id>')
+@login_required
+def amazon_delete_row(product_id):
+    db = get_db_session()
     try:
-        df = get_excel_data()
-        if row_index < len(df):
-            df = df.drop(df.index[row_index])
-            df.to_excel(OUTPUT_EXCEL, index=False)
+        product = get_user_product(db, product_id)
+        if product:
+            db.delete(product)
+            db.commit()
             flash('Verwijderd', 'success')
         return redirect(url_for('amazon_rows'))
-    except:
-        return redirect(url_for('amazon_rows'))
+    finally:
+        db.close()
 
 
 @app.route('/amazon/export')
+@login_required
 def amazon_export():
     return bol_export()
 
 
 @app.route('/api/optimize-description', methods=['POST'])
+@login_required
 def optimize_description():
     """Gebruik Google AI om een betere productbeschrijving te genereren."""
     if not GOOGLE_API_KEY:
@@ -1132,6 +1207,7 @@ def optimize_description():
 
 
 @app.route('/api/optimize-title', methods=['POST'])
+@login_required
 def optimize_title():
     """Gebruik Google AI om een betere producttitel te genereren."""
     if not GOOGLE_API_KEY:
@@ -1176,8 +1252,7 @@ def optimize_title():
 
 
 if __name__ == '__main__':
-    # Zorg dat Excel bestand bestaat bij startup
-    ensure_excel_exists()
+    init_db()
     
     # Gebruik 0.0.0.0 voor Docker compatibility
     port = int(os.environ.get('PORT', 5002))

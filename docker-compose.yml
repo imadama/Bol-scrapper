@@ -1,4 +1,16 @@
 services:
+  postgres:
+    image: postgres:16
+    container_name: bol-scraper-db
+    environment:
+      - POSTGRES_DB=bol_scraper
+      - POSTGRES_USER=bol_user
+      - POSTGRES_PASSWORD=bol_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - bol-scraper-network
+
   bol-scraper:
     build: .
     container_name: bol-scraper-app
@@ -11,6 +23,7 @@ services:
       - FLASK_DEBUG=${FLASK_DEBUG:-1}
       - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-http://localhost:5002}
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - DATABASE_URL=${DATABASE_URL:-postgresql+psycopg2://bol_user:bol_password@postgres:5432/bol_scraper}
     volumes:
       # Persisteer Excel bestanden en afbeeldingen
       - ./bol_scraper:/app/bol_scraper
@@ -19,8 +32,13 @@ services:
     restart: unless-stopped
     networks:
       - bol-scraper-network
+    depends_on:
+      - postgres
 
 networks:
   bol-scraper-network:
     driver: bridge
+
+volumes:
+  postgres_data:
 

@@ -1,15 +1,28 @@
 services:
+  postgres:
+    image: postgres:16
+    container_name: bol-scraper-db
+    environment:
+      - POSTGRES_DB=bol_scraper
+      - POSTGRES_USER=bol_user
+      - POSTGRES_PASSWORD=bol_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - bol-scraper-network
+
   bol-scraper:
     build: .
     container_name: bol-scraper-app
     ports:
-      - "127.0.0.1:5000:5000"  # Alleen lokaal, Nginx proxied ernaartoe
+      - "127.0.0.1:5002:5002"  # Alleen lokaal, Nginx proxied ernaartoe
     environment:
       - FLASK_SECRET_KEY=${FLASK_SECRET_KEY}
       - HEADLESS=${HEADLESS:-true}
       - OUTPUT_EXCEL=${OUTPUT_EXCEL:-scraped_products.xlsx}
       - FLASK_DEBUG=0
       - PUBLIC_BASE_URL=${PUBLIC_BASE_URL}
+      - DATABASE_URL=${DATABASE_URL:-postgresql+psycopg2://bol_user:bol_password@postgres:5432/bol_scraper}
     volumes:
       # Persisteer Excel bestanden en afbeeldingen
       - ./bol_scraper:/app/bol_scraper
@@ -17,8 +30,13 @@ services:
     restart: always
     networks:
       - bol-scraper-network
+    depends_on:
+      - postgres
 
 networks:
   bol-scraper-network:
     driver: bridge
+
+volumes:
+  postgres_data:
 

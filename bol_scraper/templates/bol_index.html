@@ -19,6 +19,30 @@
             padding: 20px;
         }
 
+        .top-nav {
+            max-width: 600px;
+            margin: 0 auto 20px auto;
+            padding: 10px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 999px;
+        }
+
+        .top-nav a {
+            color: #2c3e50;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .top-nav .nav-right {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            font-size: 0.9rem;
+        }
+
         .container {
             max-width: 600px;
             margin: 0 auto;
@@ -168,6 +192,14 @@
 </head>
 
 <body>
+    <div class="top-nav">
+        <a href="{{ url_for('home') }}">Home</a>
+        <div class="nav-right">
+            <span>User: {{ current_user.username }}</span>
+            <a href="{{ url_for('logout') }}">Logout</a>
+        </div>
+    </div>
+
     <div class="container">
         <div class="header">
             <h1>🛒 Bol.com Scraper</h1>

@@ -24,6 +24,35 @@
             align-items: center;
         }
 
+        .top-nav {
+            width: 100%;
+            max-width: 1200px;
+            margin: 20px auto 0 auto;
+            padding: 10px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(0, 0, 0, 0.25);
+            border-radius: 999px;
+        }
+
+        .top-nav a {
+            color: white;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .top-nav .nav-right {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+
+        .top-nav .nav-user {
+            opacity: 0.8;
+            font-size: 0.9rem;
+        }
+
         .header {
             text-align: center;
             padding: 60px 20px;
@@ -145,6 +174,14 @@
 </head>
 
 <body>
+    <div class="top-nav">
+        <a href="{{ url_for('home') }}">Home</a>
+        <div class="nav-right">
+            <span class="nav-user">User: {{ current_user.username }}</span>
+            <a href="{{ url_for('logout') }}">Logout</a>
+        </div>
+    </div>
+
     <div class="header">
         <h1>Multi-Platform Scraper</h1>
         <p>Kies je platform en begin met het verzamelen van productdata voor Excel.</p>
