@@ -273,9 +273,9 @@ def get_user_product(db, product_id: int) -> Optional[Product]:
     )
 
 
-def create_draft_product(db, platform: str, source_url: str, product_data: Dict[str, Any]) -> Product:
+def create_draft_product(db, platform: str, source_url: str, product_data: Dict[str, Any], user_id: int) -> Product:
     product = Product(
-        user_id=g.current_user.id,
+        user_id=user_id,
         platform=platform,
         source_url=source_url,
         title=product_data.get('title'),
@@ -399,7 +399,9 @@ def printables_scrape():
         
         db = get_db_session()
         try:
-            product = create_draft_product(db, platform='printables', source_url=url, product_data=product_data)
+            product = create_draft_product(db, platform='printables', source_url=url, product_data=product_data, user_id=g.current_user.id)
+            new_product_id = product.id
+
             # Download afbeeldingen naar /static en vervang URLs door serveerbare lokale URLs
             try:
                 new_main, new_all = process_images_into_static(
@@ -408,17 +410,18 @@ def printables_scrape():
                     title=product_data.get('title', ''),
                     ean=f"PR-{int(time.time())}",
                     user_id=g.current_user.id,
-                    product_id=product.id,
+                    product_id=new_product_id,
                 )
                 product.main_image = new_main
                 product.all_images = new_all
             except Exception:
                 pass
+            # ID veiligstellen voordat session sluit/expireert
+            session['current_product_id'] = new_product_id
             db.commit()
         finally:
             db.close()
 
-        session['current_product_id'] = product.id
         # Gebruik de BOL edit flow voor nu, want de velden zijn gemapped
         # Maar we moeten wel weten dat we terug naar printables moeten als we cancelen?
         # Voorlopig linken we naar dezelfde edit pagina, maar die post naar /bol/edit...
@@ -694,7 +697,17 @@ def process_images_into_static(
     if main_image_url:
         urls.append(main_image_url)
     if all_images_concat:
-        urls.extend([u for u in all_images_concat.split('|') if u])
+        # Split op zowel | als \n (en eventueel ,)
+        # Eerst alles normaliseren naar 1 separator
+        cleaned = all_images_concat.replace('|', '\n').replace('\r', '')
+        # Splitsen op newline
+        raw_urls = cleaned.split('\n')
+        
+        # Voeg toe aan lijst (strip whitespace en eventuele trailing komma's)
+        for u in raw_urls:
+            clean_u = u.strip().strip(',')
+            if clean_u:
+                urls.append(clean_u)
 
     # Dedupe met behoud van volgorde
     seen = set()
@@ -718,7 +731,8 @@ def process_images_into_static(
             stored_urls.append(stored)
 
     new_main = stored_urls[0] if stored_urls else ''
-    new_all = '|'.join(stored_urls)
+    # Join met ,\n zoals gevraagd
+    new_all = ',\n'.join(stored_urls)
     return new_main, new_all
 
 
@@ -769,7 +783,9 @@ def bol_scrape():
 
         db = get_db_session()
         try:
-            product = create_draft_product(db, platform='bol', source_url=url, product_data=product_data)
+            product = create_draft_product(db, platform='bol', source_url=url, product_data=product_data, user_id=g.current_user.id)
+            new_product_id = product.id  # Direct opslaan
+
             # Download afbeeldingen naar /static en vervang URLs door serveerbare lokale URLs
             try:
                 new_main, new_all = process_images_into_static(
@@ -778,18 +794,21 @@ def bol_scrape():
                     title=product_data.get('title', ''),
                     ean=product_data.get('ean', ''),
                     user_id=g.current_user.id,
-                    product_id=product.id,
+                    product_id=new_product_id,
                 )
                 product.main_image = new_main
                 product.all_images = new_all
             except Exception:
                 # Bij fout: laat originele URLs staan
                 pass
+            
+            # ID veiligstellen
+            session['current_product_id'] = new_product_id
             db.commit()
         finally:
             db.close()
 
-        session['current_product_id'] = product.id
+        # session['current_product_id'] is already set above
         return redirect(url_for('bol_edit'))
 
     except Exception as e:
@@ -1023,7 +1042,9 @@ def amazon_scrape():
 
         db = get_db_session()
         try:
-            product = create_draft_product(db, platform='amazon', source_url=url, product_data=product_data)
+            product = create_draft_product(db, platform='amazon', source_url=url, product_data=product_data, user_id=g.current_user.id)
+            new_product_id = product.id
+
             # Download afbeeldingen
             try:
                 new_main, new_all = process_images_into_static(
@@ -1032,17 +1053,20 @@ def amazon_scrape():
                     title=product_data.get('title', ''),
                     ean=product_data.get('ean', '') or f"AMZ-{int(time.time())}",
                     user_id=g.current_user.id,
-                    product_id=product.id,
+                    product_id=new_product_id,
                 )
                 product.main_image = new_main
                 product.all_images = new_all
             except Exception:
                 pass
+            
+            # ID veiligstellen
+            session['current_product_id'] = new_product_id
             db.commit()
         finally:
             db.close()
 
-        session['current_product_id'] = product.id
+        # session['current_product_id'] is already set above
         return redirect(url_for('amazon_edit'))
         
     except Exception as e:
