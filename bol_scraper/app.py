@@ -1247,6 +1247,7 @@ def optimize_description():
         - Focus op voordelen voor de klant
         - Maak het SEO vriendelijk
         - Geen inleiding of slot, alleen de beschrijving zelf
+        - LAAT HET MERK (BRAND NAME) WEG UIT DE TEKST. Beschrijf het product neutraal zonder de merknaam te noemen.
         """
         
         response = model.generate_content(prompt)
@@ -1277,13 +1278,14 @@ def optimize_title():
         
         prompt = f"""
         Herschrijf de producttitel voor Bol.com volgens exact deze structuur:
-        [Merknaam] [Serie] - [Productgroep] - [Kenmerk 1] - [Kenmerk 2] - [Kenmerk 3]
+        [Serie] - [Productgroep] - [Kenmerk 1] - [Kenmerk 2] - [Kenmerk 3]
         
         Input Titel: {current_title}
         Input Beschrijving: {description}
         
         Richtlijnen:
-        - Haal merk, serie en kenmerken uit de input.
+        - Haal serie en kenmerken uit de input.
+        - LAAT DE MERKNAAM WEG. De titel mag GEEN merknaam bevatten.
         - Als een serie niet bestaat, sla die over.
         - Zorg dat het professioneel klinkt.
         - Geen inleiding, alleen de titelsuggestie.
