@@ -733,6 +733,38 @@ def process_images_into_static(
     new_main = stored_urls[0] if stored_urls else ''
     # Join met ,\n zoals gevraagd
     new_all = ',\n'.join(stored_urls)
+    new_main = stored_urls[0] if stored_urls else ''
+    # Join met ,\n zoals gevraagd
+    new_all = ',\n'.join(stored_urls)
+    return new_main, new_all
+
+
+def process_images_keep_remote(main_image_url: str, all_images_concat: str) -> Tuple[str, str]:
+    """Bewerk URLs (splitsen/opschonen) maar download niets. Return originele URLs."""
+    urls: List[str] = []
+    if main_image_url:
+        urls.append(main_image_url)
+    
+    if all_images_concat:
+        # Split op zowel | als \n (en eventueel ,)
+        cleaned = all_images_concat.replace('|', '\n').replace('\r', '')
+        raw_urls = cleaned.split('\n')
+        
+        for u in raw_urls:
+            clean_u = u.strip().strip(',')
+            if clean_u:
+                urls.append(clean_u)
+
+    # Dedupe
+    seen = set()
+    ordered_urls = []
+    for u in urls:
+        if u not in seen:
+            seen.add(u)
+            ordered_urls.append(u)
+
+    new_main = ordered_urls[0] if ordered_urls else ''
+    new_all = ',\n'.join(ordered_urls)
     return new_main, new_all
 
 
@@ -1045,15 +1077,11 @@ def amazon_scrape():
             product = create_draft_product(db, platform='amazon', source_url=url, product_data=product_data, user_id=g.current_user.id)
             new_product_id = product.id
 
-            # Download afbeeldingen
+            # Amazon: Sla originele URLs op, download niets lokaal
             try:
-                new_main, new_all = process_images_into_static(
+                new_main, new_all = process_images_keep_remote(
                     product_data.get('main_image', ''),
-                    product_data.get('all_images', ''),
-                    title=product_data.get('title', ''),
-                    ean=product_data.get('ean', '') or f"AMZ-{int(time.time())}",
-                    user_id=g.current_user.id,
-                    product_id=new_product_id,
+                    product_data.get('all_images', '')
                 )
                 product.main_image = new_main
                 product.all_images = new_all
