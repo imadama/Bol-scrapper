@@ -290,7 +290,20 @@
                         <label for="Additionele afbeeldingen">Additionele afbeeldingen:</label>
                         <textarea id="Additionele afbeeldingen" name="Additionele afbeeldingen"
                             rows="4">{{ data.all_images }}</textarea>
-                        <div class="field-info">Gescheiden door |</div>
+                        <div class="field-info">Gescheiden door | of ; (of newline)</div>
+                        <div class="additional-images-preview"
+                            style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px;">
+                            {% if data.all_images %}
+                            {% set images = data.all_images.replace('|', '\n').replace(';', '\n').split('\n') %}
+                            {% for img in images %}
+                            {% set img = img.strip().strip(',') %}
+                            {% if img %}
+                            <img src="{{ img }}" alt="Additionele afbeelding" class="image-preview"
+                                style="max-width: 100px; max-height: 100px;">
+                            {% endif %}
+                            {% endfor %}
+                            {% endif %}
+                        </div>
                     </div>
 
                     <!-- Nieuwe velden -->
@@ -538,4 +551,3 @@
 </body>
 
 </html>
-

@@ -70,3 +70,6 @@ htmlcov/
 # Docker (optioneel, als je deze wel wilt tracken, haal dan weg)
 # docker-compose.override.yml
 
+# Database
+*.db
+*.sqlite3

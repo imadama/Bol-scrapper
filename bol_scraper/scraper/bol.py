@@ -4,7 +4,7 @@ Bol.com scraper module
 import re
 import time
 from typing import List, Optional, Tuple, Dict, Any
-from urllib.parse import urlparse
+from urllib.parse import urlparse, quote
 
 from bs4 import BeautifulSoup
 from playwright.sync_api import sync_playwright, Browser, Page
@@ -17,6 +17,22 @@ def text(selectors: List[str], soup: BeautifulSoup) -> str:
         if element:
             return element.get_text(strip=True)
     return ""
+
+
+def clean_image_url(url: str) -> Optional[str]:
+    """Schoon afbeeldings-URL op voor Bol.com eisen."""
+    if not url:
+        return None
+        
+    # Zoek naar .jpg, .jpeg, of .png en negeer alles erachter (zoals ? parameters)
+    match = re.search(r'(.*?\.((?:jpg)|(?:jpeg)|(?:png)))(?:[?#].*)?$', url, re.IGNORECASE)
+    if not match:
+        return None
+        
+    clean_url = match.group(1)
+    # Vervang spaties door %20
+    clean_url = quote(clean_url, safe=':/_%?&=')
+    return clean_url
 
 
 def to_float_price(s: str) -> Optional[float]:
@@ -161,7 +177,9 @@ def extract_gallery_images(soup: BeautifulSoup) -> List[str]:
     for img in filmstrip_imgs:
         src = img.get('src') or img.get('data-src')
         if src and 'bol.com' in src and 'media' in src:
-            images.append(src)
+            cleaned = clean_image_url(src)
+            if cleaned:
+                images.append(cleaned)
     
     # Fallback: alle img waar URL bol.com + media bevat
     if not images:
@@ -169,7 +187,9 @@ def extract_gallery_images(soup: BeautifulSoup) -> List[str]:
         for img in all_imgs:
             src = img.get('src') or img.get('data-src')
             if src and 'bol.com' in src and 'media' in src:
-                images.append(src)
+                cleaned = clean_image_url(src)
+                if cleaned:
+                    images.append(cleaned)
     
     # Dedupe en limiet
     unique_images = list(dict.fromkeys(images))[:20]

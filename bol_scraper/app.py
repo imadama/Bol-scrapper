@@ -128,7 +128,18 @@ class Product(Base):
 
 
 def init_db() -> None:
-    Base.metadata.create_all(bind=engine)
+    import time
+    retries = 5
+    for i in range(retries):
+        try:
+            Base.metadata.create_all(bind=engine)
+            print("Database initialized successfully.")
+            break
+        except Exception as e:
+            print(f"Database connection failed: {e}. Retrying in 5 seconds... ({i+1}/{retries})")
+            time.sleep(5)
+            if i == retries - 1:
+                raise e
 
 
 init_db()
@@ -697,9 +708,9 @@ def process_images_into_static(
     if main_image_url:
         urls.append(main_image_url)
     if all_images_concat:
-        # Split op zowel | als \n (en eventueel ,)
+        # Split op zowel |, ; als \n (en eventueel ,)
         # Eerst alles normaliseren naar 1 separator
-        cleaned = all_images_concat.replace('|', '\n').replace('\r', '')
+        cleaned = all_images_concat.replace('|', '\n').replace(';', '\n').replace('\r', '')
         # Splitsen op newline
         raw_urls = cleaned.split('\n')
         
@@ -731,11 +742,8 @@ def process_images_into_static(
             stored_urls.append(stored)
 
     new_main = stored_urls[0] if stored_urls else ''
-    # Join met ,\n zoals gevraagd
-    new_all = ',\n'.join(stored_urls)
-    new_main = stored_urls[0] if stored_urls else ''
-    # Join met ,\n zoals gevraagd
-    new_all = ',\n'.join(stored_urls)
+    # Join met ; in plaats van ,\n
+    new_all = ';'.join(stored_urls)
     return new_main, new_all
 
 
@@ -746,8 +754,8 @@ def process_images_keep_remote(main_image_url: str, all_images_concat: str) -> T
         urls.append(main_image_url)
     
     if all_images_concat:
-        # Split op zowel | als \n (en eventueel ,)
-        cleaned = all_images_concat.replace('|', '\n').replace('\r', '')
+        # Split op zowel |, ; als \n (en eventueel ,)
+        cleaned = all_images_concat.replace('|', '\n').replace(';', '\n').replace('\r', '')
         raw_urls = cleaned.split('\n')
         
         for u in raw_urls:
@@ -764,7 +772,8 @@ def process_images_keep_remote(main_image_url: str, all_images_concat: str) -> T
             ordered_urls.append(u)
 
     new_main = ordered_urls[0] if ordered_urls else ''
-    new_all = ',\n'.join(ordered_urls)
+    # Join met ;
+    new_all = ';'.join(ordered_urls)
     return new_main, new_all
 
 
@@ -1248,10 +1257,11 @@ def optimize_description():
         - Maak het SEO vriendelijk
         - Geen inleiding of slot, alleen de beschrijving zelf
         - LAAT HET MERK (BRAND NAME) WEG UIT DE TEKST. Beschrijf het product neutraal zonder de merknaam te noemen.
+        - GEBRUIK GEEN MARKDOWN (zoals **vetgedrukt** of *cursief*). Bol.com ondersteunt dit niet.
         """
         
         response = model.generate_content(prompt)
-        optimized_text = response.text
+        optimized_text = response.text.replace('**', '')
         
         return jsonify({'result': optimized_text})
         

@@ -4,7 +4,7 @@ Amazon scraper module
 import re
 import time
 from typing import List, Optional, Tuple, Dict, Any
-from urllib.parse import urlparse
+from urllib.parse import urlparse, quote
 
 from bs4 import BeautifulSoup
 from playwright.sync_api import sync_playwright, Browser, Page
@@ -17,6 +17,22 @@ def text(selectors: List[str], soup: BeautifulSoup) -> str:
         if element:
             return element.get_text(strip=True)
     return ""
+
+
+def clean_image_url(url: str) -> Optional[str]:
+    """Schoon afbeeldings-URL op voor Bol.com eisen."""
+    if not url:
+        return None
+        
+    # Zoek naar .jpg, .jpeg, of .png en negeer alles erachter (zoals ? parameters)
+    match = re.search(r'(.*?\.((?:jpg)|(?:jpeg)|(?:png)))(?:[?#].*)?$', url, re.IGNORECASE)
+    if not match:
+        return None
+        
+    clean_url = match.group(1)
+    # Vervang spaties door %20
+    clean_url = quote(clean_url, safe=':/_%?&=')
+    return clean_url
 
 
 def to_float_price(s: str) -> Optional[float]:
@@ -196,7 +212,9 @@ def extract_images(soup: BeautifulSoup) -> List[str]:
                 # Dit is wat complexer parsing, laten we 'data-old-hires' proberen
                 pass
             else:
-               images.append(src)
+               cleaned = clean_image_url(src)
+               if cleaned:
+                   images.append(cleaned)
     
     # Alt images (thumbnails klikken zou moeten in browser, maar in HTML staan ze soms in script blocks)
     # We kijken naar .a-button-text img
@@ -212,9 +230,13 @@ def extract_images(soup: BeautifulSoup) -> List[str]:
             if base != src:
                 # Gok extentie jpg
                 hi_res = f"{base}.jpg"
-                images.append(hi_res)
+                cleaned = clean_image_url(hi_res)
+                if cleaned:
+                    images.append(cleaned)
             else:
-                images.append(src)
+                cleaned = clean_image_url(src)
+                if cleaned:
+                    images.append(cleaned)
                 
     return list(dict.fromkeys(images))[:20]
 
