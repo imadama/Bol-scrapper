@@ -15,7 +15,7 @@ from urllib.error import URLError, HTTPError
 
 import pandas as pd
 from flask import Flask, render_template, request, redirect, url_for, flash, session, send_file, jsonify, g
-import google.generativeai as genai
+from openai import OpenAI
 from dotenv import load_dotenv
 from werkzeug.security import generate_password_hash, check_password_hash
 from sqlalchemy import (
@@ -38,13 +38,16 @@ from scraper.amazon import scrape_amazon_product
 load_dotenv()
 load_dotenv('.env.local')
 
-# Configure Google AI
-GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
-if GOOGLE_API_KEY:
-    try:
-        genai.configure(api_key=GOOGLE_API_KEY)
-    except Exception as e:
-        print(f"Error configuring Google AI: {e}")
+# Configure Ollama
+OLLAMA_HOST = os.getenv('OLLAMA_HOST', 'http://localhost:11434')
+OLLAMA_MODEL = os.getenv('OLLAMA_MODEL', 'qwen3:32b')
+
+def _ollama_client():
+    return OpenAI(base_url=f"{OLLAMA_HOST}/v1", api_key="ollama")
+
+def _strip_thinking(text):
+    import re
+    return re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL).strip()
 
 app = Flask(__name__)
 app.secret_key = os.getenv('FLASK_SECRET_KEY', 'dev-secret-key')
@@ -1229,42 +1232,37 @@ def amazon_export():
 @app.route('/api/optimize-description', methods=['POST'])
 @login_required
 def optimize_description():
-    """Gebruik Google AI om een betere productbeschrijving te genereren."""
-    if not GOOGLE_API_KEY:
-        return jsonify({'error': 'Geen Google API key geconfigureerd'}), 500
-        
     data = request.get_json()
     title = data.get('title', '')
     current_description = data.get('description', '')
-    
+
     if not title and not current_description:
         return jsonify({'error': 'Geen titel of beschrijving opgegeven'}), 400
-        
+
     try:
-        model = genai.GenerativeModel('models/gemini-3-pro-preview')
-        
-        prompt = f"""
-        Schrijf een professionele, verkoopkrachtige productbeschrijving voor Bol.com.
-        
-        Product Titel: {title}
-        Huidige Beschrijving/Info: {current_description}
-        
-        Richtlijnen:
-        - Gebruik makkelijk leesbare paragrafen
-        - Gebruik opsommingstekens voor kenmerken (indien van toepassing)
-        - Schrijf in het Nederlands
-        - Focus op voordelen voor de klant
-        - Maak het SEO vriendelijk
-        - Geen inleiding of slot, alleen de beschrijving zelf
-        - LAAT HET MERK (BRAND NAME) WEG UIT DE TEKST. Beschrijf het product neutraal zonder de merknaam te noemen.
-        - GEBRUIK GEEN MARKDOWN (zoals **vetgedrukt** of *cursief*). Bol.com ondersteunt dit niet.
-        """
-        
-        response = model.generate_content(prompt)
-        optimized_text = response.text.replace('**', '')
-        
+        prompt = f"""Schrijf een professionele, verkoopkrachtige productbeschrijving voor Bol.com.
+
+Product Titel: {title}
+Huidige Beschrijving/Info: {current_description}
+
+Richtlijnen:
+- Gebruik makkelijk leesbare paragrafen
+- Gebruik opsommingstekens voor kenmerken (indien van toepassing)
+- Schrijf in het Nederlands
+- Focus op voordelen voor de klant
+- Maak het SEO vriendelijk
+- Geen inleiding of slot, alleen de beschrijving zelf
+- LAAT HET MERK (BRAND NAME) WEG UIT DE TEKST. Beschrijf het product neutraal zonder de merknaam te noemen.
+- GEBRUIK GEEN MARKDOWN (zoals **vetgedrukt** of *cursief*). Bol.com ondersteunt dit niet."""
+
+        client = _ollama_client()
+        response = client.chat.completions.create(
+            model=OLLAMA_MODEL,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        optimized_text = _strip_thinking(response.choices[0].message.content)
         return jsonify({'result': optimized_text})
-        
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -1272,45 +1270,36 @@ def optimize_description():
 @app.route('/api/optimize-title', methods=['POST'])
 @login_required
 def optimize_title():
-    """Gebruik Google AI om een betere producttitel te genereren."""
-    if not GOOGLE_API_KEY:
-        return jsonify({'error': 'Geen Google API key geconfigureerd'}), 500
-        
     data = request.get_json()
     current_title = data.get('title', '')
     description = data.get('description', '')
-    
+
     if not current_title and not description:
         return jsonify({'error': 'Geen titel of beschrijving beschikbaar'}), 400
-        
+
     try:
-        model = genai.GenerativeModel('models/gemini-3-pro-preview')
-        
-        prompt = f"""
-        Herschrijf de producttitel voor Bol.com volgens exact deze structuur:
-        [Serie] - [Productgroep] - [Kenmerk 1] - [Kenmerk 2] - [Kenmerk 3]
-        
-        Input Titel: {current_title}
-        Input Beschrijving: {description}
-        
-        Richtlijnen:
-        - Haal serie en kenmerken uit de input.
-        - LAAT DE MERKNAAM WEG. De titel mag GEEN merknaam bevatten.
-        - Als een serie niet bestaat, sla die over.
-        - Zorg dat het professioneel klinkt.
-        - Geen inleiding, alleen de titelsuggestie.
-        - Houd het beknopt maar informatief.
-        """
-        
-        response = model.generate_content(prompt)
-        optimized_title = response.text.strip()
-        
-        # Verwijder quotes als die eromheen staan
-        if optimized_title.startswith('"') and optimized_title.endswith('"'):
-            optimized_title = optimized_title[1:-1]
-            
+        prompt = f"""Herschrijf de producttitel voor Bol.com volgens exact deze structuur:
+[Serie] - [Productgroep] - [Kenmerk 1] - [Kenmerk 2] - [Kenmerk 3]
+
+Input Titel: {current_title}
+Input Beschrijving: {description}
+
+Richtlijnen:
+- Haal serie en kenmerken uit de input.
+- LAAT DE MERKNAAM WEG. De titel mag GEEN merknaam bevatten.
+- Als een serie niet bestaat, sla die over.
+- Zorg dat het professioneel klinkt.
+- Geen inleiding, alleen de titelsuggestie.
+- Houd het beknopt maar informatief."""
+
+        client = _ollama_client()
+        response = client.chat.completions.create(
+            model=OLLAMA_MODEL,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        optimized_title = _strip_thinking(response.choices[0].message.content).strip('"')
         return jsonify({'result': optimized_title})
-        
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
