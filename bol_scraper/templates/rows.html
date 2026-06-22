@@ -321,6 +321,9 @@
                 {% elif platform == 'printables' %}
                 <a href="{{ url_for('printables_index') }}" class="btn btn-primary">🏠 Home</a>
                 <a href="{{ url_for('printables_export') }}" class="btn btn-success">📊 Exporteer Excel</a>
+                {% elif platform == 'joybuy' %}
+                <a href="{{ url_for('joybuy_index') }}" class="btn btn-primary">🏠 Home</a>
+                <a href="{{ url_for('joybuy_export') }}" class="btn btn-success">📊 Exporteer Excel</a>
                 {% else %}
                 <a href="{{ url_for('bol_index') }}" class="btn btn-primary">🏠 Home</a>
                 <a href="{{ url_for('bol_export') }}" class="btn btn-success">📊 Exporteer Excel</a>
@@ -425,6 +428,12 @@
                                     <a href="{{ url_for('printables_delete_row', product_id=row.product_id) }}"
                                         class="btn-delete" title="Verwijderen"
                                         onclick="return confirm('Weet je zeker dat je dit product wilt verwijderen?')">🗑️</a>
+                                    {% elif platform == 'joybuy' %}
+                                    <a href="{{ url_for('joybuy_edit_row', product_id=row.product_id) }}"
+                                        class="btn-edit" title="Bewerken">✏️</a>
+                                    <a href="{{ url_for('joybuy_delete_row', product_id=row.product_id) }}"
+                                        class="btn-delete" title="Verwijderen"
+                                        onclick="return confirm('Weet je zeker dat je dit product wilt verwijderen?')">🗑️</a>
                                     {% else %}
                                     <a href="{{ url_for('bol_edit_row', product_id=row.product_id) }}" class="btn-edit"
                                         title="Bewerken">✏️</a>
@@ -447,6 +456,8 @@
                 <a href="{{ url_for('amazon_index') }}" class="btn btn-primary">🏠 Ga naar Amazon Scraper</a>
                 {% elif platform == 'printables' %}
                 <a href="{{ url_for('printables_index') }}" class="btn btn-primary">🏠 Ga naar Printables Scraper</a>
+                {% elif platform == 'joybuy' %}
+                <a href="{{ url_for('joybuy_index') }}" class="btn btn-primary">🏠 Ga naar Joybuy Scraper</a>
                 {% else %}
                 <a href="{{ url_for('bol_index') }}" class="btn btn-primary">🏠 Ga naar Bol Scraper</a>
                 {% endif %}

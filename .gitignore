@@ -73,3 +73,7 @@ htmlcov/
 # Database
 *.db
 *.sqlite3
+
+# Joybuy persistente browsersessie (bevat cookies)
+joybuy_profile/
+bol_scraper/scraper/joybuy_profile/

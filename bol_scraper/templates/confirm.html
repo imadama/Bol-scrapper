@@ -325,6 +325,10 @@
                 <a href="{{ url_for('printables_edit') }}" class="btn btn-secondary">
                     ← Terug Bewerken
                 </a>
+                {% elif platform == 'joybuy' %}
+                <a href="{{ url_for('joybuy_edit') }}" class="btn btn-secondary">
+                    ← Terug Bewerken
+                </a>
                 {% else %}
                 <a href="{{ url_for('bol_edit') }}" class="btn btn-secondary">
                     ← Terug Bewerken

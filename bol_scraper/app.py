@@ -34,6 +34,7 @@ from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 from scraper.printables import scrape_printables_product
 from scraper.bol import scrape_bol_product
 from scraper.amazon import scrape_amazon_product
+from scraper.joybuy import scrape_joybuy_product
 
 load_dotenv()
 load_dotenv('.env.local')
@@ -564,6 +565,183 @@ def printables_export():
     return bol_export() # Reuse export logic
 
 
+# ---------------------------------------------------------------------------
+# Joybuy.nl routes
+# ---------------------------------------------------------------------------
+@app.route('/joybuy')
+@login_required
+def joybuy_index():
+    """Joybuy Scraper hoofdpagina."""
+    return render_template('joybuy_index.html')
+
+
+@app.route('/joybuy/scrape', methods=['POST'])
+@login_required
+def joybuy_scrape():
+    """Start scrape van Joybuy URL."""
+    url = request.form.get('url', '').strip()
+    ean = request.form.get('ean', '').strip()
+
+    if not url:
+        flash('Voer een URL in', 'error')
+        return redirect(url_for('joybuy_index'))
+
+    if 'joybuy' not in url:
+        flash('URL moet van joybuy.nl zijn', 'error')
+        return redirect(url_for('joybuy_index'))
+
+    try:
+        # Scrape product (EAN wordt zelden publiek getoond op joybuy, dus optioneel meegeven)
+        product_data = scrape_joybuy_product(url, headless=HEADLESS, ean=ean)
+        product_data['source_url'] = url
+        if ean:
+            product_data['ean'] = re.sub(r'\D', '', ean)
+
+        db = get_db_session()
+        try:
+            product = create_draft_product(db, platform='joybuy', source_url=url, product_data=product_data, user_id=g.current_user.id)
+            new_product_id = product.id
+
+            # Download afbeeldingen naar /static en vervang URLs door serveerbare lokale URLs
+            try:
+                new_main, new_all = process_images_into_static(
+                    product_data.get('main_image', ''),
+                    product_data.get('all_images', ''),
+                    title=product_data.get('title', ''),
+                    ean=product_data.get('ean') or f"JB-{int(time.time())}",
+                    user_id=g.current_user.id,
+                    product_id=new_product_id,
+                )
+                product.main_image = new_main
+                product.all_images = new_all
+            except Exception:
+                pass
+            session['current_product_id'] = new_product_id
+            db.commit()
+        finally:
+            db.close()
+
+        return redirect(url_for('joybuy_edit'))
+
+    except Exception as e:
+        flash(f'Scrape fout: {str(e)}', 'error')
+        return redirect(url_for('joybuy_index'))
+
+
+@app.route('/joybuy/edit', methods=['GET', 'POST'])
+@login_required
+def joybuy_edit():
+    """Formulier voor bewerken van Joybuy data."""
+    product_id = session.get('current_product_id')
+    if not product_id:
+        flash('Geen data om te bewerken', 'error')
+        return redirect(url_for('joybuy_index'))
+
+    db = get_db_session()
+    try:
+        product = get_user_product(db, product_id)
+        if not product:
+            flash('Geen data om te bewerken', 'error')
+            return redirect(url_for('joybuy_index'))
+
+        if request.method == 'POST':
+            update_product_from_form(product, request.form)
+            db.commit()
+            return redirect(url_for('joybuy_confirm'))
+
+        return render_template('edit.html', data=product_to_internal_data(product), platform='joybuy')
+    finally:
+        db.close()
+
+
+@app.route('/joybuy/confirm', methods=['GET', 'POST'])
+@login_required
+def joybuy_confirm():
+    product_id = session.get('current_product_id')
+    if not product_id:
+        flash('Geen data om te bevestigen', 'error')
+        return redirect(url_for('joybuy_index'))
+
+    db = get_db_session()
+    try:
+        product = get_user_product(db, product_id)
+        if not product:
+            flash('Geen data om te bevestigen', 'error')
+            return redirect(url_for('joybuy_index'))
+
+        if request.method == 'POST':
+            was_draft = product.is_draft
+            product.is_draft = False
+            product.updated_at = datetime.utcnow()
+            db.commit()
+            session.pop('current_product_id', None)
+            flash('Product opgeslagen!', 'success')
+            return redirect(url_for('joybuy_index' if was_draft else 'joybuy_rows'))
+
+        return render_template('confirm.html', data=product_to_internal_data(product), platform='joybuy')
+    finally:
+        db.close()
+
+
+@app.route('/joybuy/rows')
+@login_required
+def joybuy_rows():
+    """Overzicht rijen (gedeelde Excel)."""
+    db = get_db_session()
+    try:
+        products = (
+            db.query(Product)
+            .filter(Product.user_id == g.current_user.id, Product.is_draft.is_(False))
+            .order_by(Product.created_at.desc())
+            .all()
+        )
+        rows_data = []
+        for product in products:
+            row = product_to_excel_row(product)
+            row['product_id'] = product.id
+            rows_data.append(row)
+
+        return render_template('rows.html', rows=rows_data, platform='joybuy')
+    except Exception as e:
+        flash(f'Fout: {str(e)}', 'error')
+        return redirect(url_for('joybuy_index'))
+    finally:
+        db.close()
+
+
+@app.route('/joybuy/edit_row/<int:product_id>')
+@login_required
+def joybuy_edit_row(product_id):
+    db = get_db_session()
+    try:
+        product = get_user_product(db, product_id)
+        if not product:
+            return redirect(url_for('joybuy_rows'))
+        session['current_product_id'] = product.id
+        return redirect(url_for('joybuy_edit'))
+    finally:
+        db.close()
+
+
+@app.route('/joybuy/delete_row/<int:product_id>')
+@login_required
+def joybuy_delete_row(product_id):
+    db = get_db_session()
+    try:
+        product = get_user_product(db, product_id)
+        if product:
+            db.delete(product)
+            db.commit()
+            flash('Verwijderd', 'success')
+        return redirect(url_for('joybuy_rows'))
+    finally:
+        db.close()
+
+
+@app.route('/joybuy/export')
+@login_required
+def joybuy_export():
+    return bol_export()  # Reuse export logic
 
 
 def validate_bol_url(url: str) -> bool:

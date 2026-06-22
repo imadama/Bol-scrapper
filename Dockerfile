@@ -10,8 +10,9 @@ COPY requirements.txt .
 # Installeer Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Installeer WebKit expliciet (voor zekerheid)
-RUN playwright install webkit
+# Installeer WebKit + Chromium expliciet (voor zekerheid)
+# WebKit: bol/amazon/printables scrapers. Chromium: joybuy scraper (anti-bot).
+RUN playwright install webkit chromium
 
 # Kopieer de applicatie bestanden
 COPY bol_scraper/ /app/bol_scraper/

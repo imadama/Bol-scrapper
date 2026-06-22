@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="nl">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Joybuy Scraper</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #E1251B 0%, #FF6B5E 100%);
+            /* Joybuy / JD Red */
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .top-nav {
+            max-width: 600px;
+            margin: 0 auto 20px auto;
+            padding: 10px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 999px;
+        }
+
+        .top-nav a {
+            color: #333333;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .top-nav .nav-right {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            font-size: 0.9rem;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: #333333;
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2rem;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            opacity: 0.8;
+            font-size: 1.1rem;
+        }
+
+        .content {
+            padding: 40px;
+        }
+
+        .form-group {
+            margin-bottom: 25px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333333;
+        }
+
+        input[type="url"],
+        input[type="text"] {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #e1e8ed;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+
+        input[type="url"]:focus,
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #E1251B;
+        }
+
+        .field-hint {
+            margin-top: 6px;
+            font-size: 0.85rem;
+            color: #777;
+        }
+
+        .button-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-top: 30px;
+        }
+
+        .btn {
+            padding: 15px 25px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: inline-block;
+            text-align: center;
+        }
+
+        .btn-primary {
+            background: #E1251B;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #c01f16;
+            transform: translateY(-2px);
+        }
+
+        .btn-secondary {
+            background: #95a5a6;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #7f8c8d;
+            transform: translateY(-2px);
+        }
+
+        .btn-success {
+            background: #27ae60;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #229954;
+            transform: translateY(-2px);
+        }
+
+        .btn-full {
+            grid-column: 1 / -1;
+        }
+
+        .alert {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .info-box {
+            background: #fdecea;
+            border: 1px solid #f5c6cb;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 30px;
+        }
+
+        .info-box h3 {
+            color: #c01f16;
+            margin-bottom: 10px;
+        }
+
+        .info-box p {
+            color: #424242;
+            line-height: 1.6;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="top-nav">
+        <a href="{{ url_for('home') }}">Home</a>
+        <div class="nav-right">
+            <span>User: {{ current_user.username }}</span>
+            <a href="{{ url_for('logout') }}">Logout</a>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="header">
+            <h1>🛍️ Joybuy Scraper</h1>
+            <p>Scrape productdata en beheer in Excel</p>
+        </div>
+
+        <div class="content">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+            {% for category, message in messages %}
+            <div class="alert alert-{{ 'success' if category == 'success' else 'error' }}">
+                {{ message }}
+            </div>
+            {% endfor %}
+            {% endif %}
+            {% endwith %}
+
+            <form method="POST" action="{{ url_for('joybuy_scrape') }}">
+                <div class="form-group">
+                    <label for="url">Joybuy Product URL:</label>
+                    <input type="url" id="url" name="url" placeholder="https://www.joybuy.nl/dp/..." required>
+                </div>
+
+                <div class="form-group">
+                    <label for="ean">EAN (optioneel):</label>
+                    <input type="text" id="ean" name="ean" placeholder="bijv. 8785342541375"
+                        pattern="[0-9 ]*" inputmode="numeric">
+                    <div class="field-hint">Joybuy toont de EAN zelden publiek. Vul deze hier in om hem mee op te slaan
+                        voor je Bol.com-listing.</div>
+                </div>
+
+                <div class="button-group">
+                    <button type="submit" class="btn btn-primary">
+                        🔍 Scrape Product
+                    </button>
+
+                    <a href="{{ url_for('joybuy_rows') }}" class="btn btn-secondary">
+                        📋 Bekijk Opgeslagen
+                    </a>
+
+                    <a href="{{ url_for('joybuy_export') }}" class="btn btn-success btn-full">
+                        📊 Exporteer Excel
+                    </a>
+                </div>
+                <div style="margin-top: 20px; text-align: center;">
+                    <a href="{{ url_for('home') }}" style="color: #E1251B; text-decoration: none;">← Terug naar platform
+                        keuze</a>
+                </div>
+            </form>
+
+            <div class="info-box">
+                <h3>💡 Tips</h3>
+                <p>
+                    • Plak een volledige joybuy.nl product-URL (/dp/...)<br>
+                    • Joybuy heeft een agressieve bot-beveiliging; lukt het niet, probeer dan opnieuw of zet
+                    <code>HEADLESS=false</code><br>
+                    • Data wordt gedeeld in dezelfde Excel als Bol data<br>
+                </p>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>

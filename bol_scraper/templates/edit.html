@@ -388,6 +388,10 @@
                     <a href="{{ url_for('printables_index') }}" class="btn btn-secondary">
                         ← Terug
                     </a>
+                    {% elif platform == 'joybuy' %}
+                    <a href="{{ url_for('joybuy_index') }}" class="btn btn-secondary">
+                        ← Terug
+                    </a>
                     {% else %}
                     <a href="{{ url_for('bol_index') }}" class="btn btn-secondary">
                         ← Terug
