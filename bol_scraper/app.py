@@ -15,7 +15,6 @@ from urllib.error import URLError, HTTPError
 
 import pandas as pd
 from flask import Flask, render_template, request, redirect, url_for, flash, session, send_file, jsonify, g
-from openai import OpenAI
 from dotenv import load_dotenv
 from werkzeug.security import generate_password_hash, check_password_hash
 from sqlalchemy import (
@@ -43,12 +42,48 @@ load_dotenv('.env.local')
 OLLAMA_HOST = os.getenv('OLLAMA_HOST', 'http://localhost:11434')
 OLLAMA_MODEL = os.getenv('OLLAMA_MODEL', 'qwen3:32b')
 
-def _ollama_client():
-    return OpenAI(base_url=f"{OLLAMA_HOST}/v1", api_key="ollama")
+def _ollama_chat(prompt, max_tokens=800):
+    """Roep Ollama's native chat-API aan met thinking uitgeschakeld.
+
+    Bewust de native /api/chat i.p.v. de OpenAI-compat laag: alleen de
+    native API respecteert 'think: false', waardoor thinking-modellen
+    (gemma4, qwen3) direct antwoorden i.p.v. hun token-budget aan
+    redeneren op te branden.
+    """
+    import json
+    payload = json.dumps({
+        'model': OLLAMA_MODEL,
+        'stream': False,
+        'think': False,
+        'options': {'temperature': 0.4, 'num_predict': max_tokens},
+        'messages': [
+            {'role': 'system', 'content': AI_SYSTEM_PROMPT},
+            {'role': 'user', 'content': prompt},
+        ],
+    }).encode('utf-8')
+    req = Request(f"{OLLAMA_HOST}/api/chat", data=payload,
+                  headers={'Content-Type': 'application/json'})
+    with urlopen(req, timeout=120) as resp:
+        data = json.loads(resp.read().decode('utf-8'))
+    return data['message']['content']
 
 def _strip_thinking(text):
     import re
     return re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL).strip()
+
+def _strip_markdown(text):
+    """Vangnet: verwijder markdown-opmaak die het model soms toch produceert."""
+    import re
+    text = re.sub(r'\*{1,2}([^*]+)\*{1,2}', r'\1', text)   # **vet** / *cursief*
+    text = re.sub(r'^#{1,6}\s*', '', text, flags=re.MULTILINE)  # koppen
+    return text.strip()
+
+# Gedeelde system-prompt voor de AI-tekstfuncties (titel + beschrijving)
+AI_SYSTEM_PROMPT = """Je bent een senior Nederlandse e-commerce copywriter, gespecialiseerd in
+productteksten voor Bol.com. Je schrijft feitelijk, helder en verkoopgericht
+op B1-taalniveau. Je antwoordt ALTIJD uitsluitend met de gevraagde tekst:
+geen inleiding, geen uitleg, geen afsluiting, geen aanhalingstekens om je
+antwoord."""
 
 app = Flask(__name__)
 app.secret_key = os.getenv('FLASK_SECRET_KEY', 'dev-secret-key')
@@ -1418,27 +1453,60 @@ def optimize_description():
         return jsonify({'error': 'Geen titel of beschrijving opgegeven'}), 400
 
     try:
-        prompt = f"""Schrijf een professionele, verkoopkrachtige productbeschrijving voor Bol.com.
+        prompt = f"""Schrijf een verkoopkrachtige productbeschrijving voor Bol.com op basis van
+de productinformatie in <product>.
 
-Product Titel: {title}
-Huidige Beschrijving/Info: {current_description}
+<product>
+Titel: {title}
+Informatie: {current_description}
+</product>
 
-Richtlijnen:
-- Gebruik makkelijk leesbare paragrafen
-- Gebruik opsommingstekens voor kenmerken (indien van toepassing)
-- Schrijf in het Nederlands
-- Focus op voordelen voor de klant
-- Maak het SEO vriendelijk
-- Geen inleiding of slot, alleen de beschrijving zelf
-- LAAT HET MERK (BRAND NAME) WEG UIT DE TEKST. Beschrijf het product neutraal zonder de merknaam te noemen.
-- GEBRUIK GEEN MARKDOWN (zoals **vetgedrukt** of *cursief*). Bol.com ondersteunt dit niet."""
+STRUCTUUR (in deze volgorde):
+1. Openingszin die het belangrijkste klantvoordeel benoemt
+2. Eén of twee korte alinea's: wat doet het product en voor wie is het
+   handig; beschrijf gebruikssituaties
+3. Kopje "Kenmerken:" gevolgd door een opsomming, elke regel begint met "- "
 
-        client = _ollama_client()
-        response = client.chat.completions.create(
-            model=OLLAMA_MODEL,
-            messages=[{"role": "user", "content": prompt}]
-        )
-        optimized_text = _strip_thinking(response.choices[0].message.content)
+TAAL & STIJL:
+- Nederlands, 120-250 woorden
+- Actieve zinnen, spreek de lezer aan met "je"
+- Vermijd loze marketingtaal ("hoogwaardige kwaliteit", "uniek design")
+  — benoem in plaats daarvan concrete eigenschappen
+- Verwerk relevante zoektermen natuurlijk in de tekst: de productgroep,
+  belangrijkste eigenschappen en gebruikssituaties. Geen keyword stuffing:
+  elke zoekterm maximaal twee keer.
+
+FEITELIJKHEID:
+- Gebruik UITSLUITEND informatie die in <product> staat. Verzin geen
+  materialen, afmetingen, certificeringen of eigenschappen.
+- Is de informatie mager? Schrijf dan een kortere, algemene tekst op basis
+  van de titel. Liever kort en waar dan lang en verzonnen.
+
+VERBODEN:
+- Merknamen (beschrijf het product neutraal)
+- Markdown (*, **, #), emoji's, HTML
+- Call-to-actions zoals "Bestel nu" of "Mis het niet"
+- Claims over prijs, levertijd, garantie of voorraad
+- Medische of veiligheidsclaims die niet letterlijk in de input staan
+- Schrijven vanuit "wij/ons" (verkopersperspectief)
+
+VOORBEELD VAN GEWENSTE OUTPUT (ander product):
+Met deze waterdichte regenjas blijft je kind droog tijdens elke regenbui.
+De jas is gemaakt voor dagelijks gebruik: op de fiets naar school, tijdens
+het buitenspelen of onderweg naar sport. Dankzij de vaste capuchon en de
+verstelbare manchetten blijft de jas goed zitten, ook bij wind.
+
+De ritssluiting loopt door tot aan de kin, zodat de nek beschermd blijft.
+Reflecterende details zorgen dat je kind goed zichtbaar is in het donker.
+
+Kenmerken:
+- Waterdicht materiaal
+- Vaste capuchon met verstelbaar koord
+- Reflecterende details voor extra zichtbaarheid
+- Ritssluiting tot aan de kin
+- Geschikt voor school, sport en buitenspelen"""
+
+        optimized_text = _strip_markdown(_strip_thinking(_ollama_chat(prompt, max_tokens=800)))
         return jsonify({'result': optimized_text})
 
     except Exception as e:
@@ -1456,26 +1524,49 @@ def optimize_title():
         return jsonify({'error': 'Geen titel of beschrijving beschikbaar'}), 400
 
     try:
-        prompt = f"""Herschrijf de producttitel voor Bol.com volgens exact deze structuur:
-[Serie] - [Productgroep] - [Kenmerk 1] - [Kenmerk 2] - [Kenmerk 3]
+        prompt = f"""Herschrijf de producttitel voor Bol.com op basis van de informatie in
+<product>.
 
-Input Titel: {current_title}
-Input Beschrijving: {description}
+<product>
+Titel: {current_title}
+Beschrijving: {description}
+</product>
 
-Richtlijnen:
-- Haal serie en kenmerken uit de input.
-- LAAT DE MERKNAAM WEG. De titel mag GEEN merknaam bevatten.
-- Als een serie niet bestaat, sla die over.
-- Zorg dat het professioneel klinkt.
-- Geen inleiding, alleen de titelsuggestie.
-- Houd het beknopt maar informatief."""
+FORMAAT:
+[Productgroep] - [Kenmerk 1] - [Kenmerk 2] - [Kenmerk 3] - [Kenmerk 4]
 
-        client = _ollama_client()
-        response = client.chat.completions.create(
-            model=OLLAMA_MODEL,
-            messages=[{"role": "user", "content": prompt}]
-        )
-        optimized_title = _strip_thinking(response.choices[0].message.content).strip('"')
+REGELS:
+- Nederlands, 60-100 tekens, exact één regel
+- Begin met de productgroep: het woord waar een klant op zoekt
+  (bijv. "Kinderregenjas", niet "Jas")
+- Kies daarna de 3-4 meest onderscheidende kenmerken, in volgorde van
+  belangrijkheid voor de koper: maat/afmeting, kleur, materiaal, aantal,
+  belangrijkste functie
+- Getallen in cijfers ("Maat 128", "Set van 3", "50x70 cm")
+- Elk element begint met een hoofdletter; geen woorden VOLLEDIG in
+  hoofdletters
+- Gebruik alleen kenmerken die letterlijk in de input staan
+- Een serienaam mag alleen vooraan als die expliciet in de input staat
+  én duidelijk geen merknaam is; bij twijfel weglaten
+
+VERBODEN:
+- Merknamen
+- Promotiewoorden: "Aanbieding", "Sale", "Gratis verzending", "Topkwaliteit",
+  "Nieuw", "Luxe"
+- Subjectieve termen: "mooi", "perfect", "ideaal"
+- Leestekens anders dan "-" tussen de elementen
+
+VOORBEELDEN:
+Input:  "AquaShield kinderregenjas blauw waterdicht met capuchon mt 128"
+Output: Kinderregenjas - Waterdicht - Maat 128 - Blauw - Met Capuchon
+
+Input:  "LEDlamp dimbaar E27 warm wit 3 stuks energiezuinig"
+Output: LED Lamp E27 - Dimbaar - Warm Wit - Set van 3 - Energiezuinig"""
+
+        raw = _strip_markdown(_strip_thinking(_ollama_chat(prompt, max_tokens=120))).strip('"')
+        # Neem alleen de eerste niet-lege regel (model geeft soms toch meerdere regels)
+        lines = [l.strip() for l in raw.splitlines() if l.strip()]
+        optimized_title = lines[0] if lines else raw
         return jsonify({'result': optimized_title})
 
     except Exception as e:

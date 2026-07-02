@@ -22,6 +22,8 @@ services:
       - OUTPUT_EXCEL=${OUTPUT_EXCEL:-scraped_products.xlsx}
       - FLASK_DEBUG=0
       - PUBLIC_BASE_URL=${PUBLIC_BASE_URL}
+      - OLLAMA_HOST=${OLLAMA_HOST:-http://localhost:11434}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-gemma4-fast:latest}
       - DATABASE_URL=${DATABASE_URL:-postgresql+psycopg2://bol_user:bol_password@postgres:5432/bol_scraper}
     volumes:
       # Persisteer Excel bestanden en afbeeldingen
