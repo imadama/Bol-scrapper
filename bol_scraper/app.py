@@ -1482,6 +1482,48 @@ Richtlijnen:
         return jsonify({'error': str(e)}), 500
 
 
+# ---------------------------------------------------------------------------
+# ama-ai-clip integration: machine-readable JSON scrape endpoints.
+#
+# Consumed by the Paperclip "ama-ai-clip" plugin (spd_scrape tool). These are
+# deliberately side-effect free: they scrape and return normalized JSON only —
+# no DB writes, no image downloads, no draft creation. No login is required
+# because the app is expected to run locally (localhost) alongside Paperclip.
+# ---------------------------------------------------------------------------
+@app.route('/api/scrape-bol', methods=['POST'])
+def api_scrape_bol():
+    """Scrape a bol.com product URL and return normalized product JSON."""
+    data = request.get_json(silent=True) or {}
+    url = normalize_bol_url(str(data.get('url', '')).strip())
+    if not url:
+        return jsonify({'error': 'Missing "url"'}), 400
+    if not validate_bol_url(url):
+        return jsonify({'error': 'URL must be a bol.com product URL'}), 400
+    try:
+        product_data = scrape_bol_product(url, headless=HEADLESS)
+        product_data['source_url'] = url
+        return jsonify(product_data), 200
+    except Exception as e:
+        return jsonify({'error': str(e), 'type': type(e).__name__}), 500
+
+
+@app.route('/api/scrape-amazon', methods=['POST'])
+def api_scrape_amazon():
+    """Scrape an Amazon product URL and return normalized product JSON."""
+    data = request.get_json(silent=True) or {}
+    url = str(data.get('url', '')).strip()
+    if not url:
+        return jsonify({'error': 'Missing "url"'}), 400
+    if 'amazon' not in url:
+        return jsonify({'error': 'URL must be an amazon.* product URL'}), 400
+    try:
+        product_data = scrape_amazon_product(url, headless=HEADLESS)
+        product_data['source_url'] = url
+        return jsonify(product_data), 200
+    except Exception as e:
+        return jsonify({'error': str(e), 'type': type(e).__name__}), 500
+
+
 if __name__ == '__main__':
     init_db()
     
