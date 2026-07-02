@@ -348,7 +348,7 @@
                             <option value="1-2d" {{ 'selected' if data.delivery_time=='1-2d' }}>1-2d</option>
                             <option value="2-3d" {{ 'selected' if data.delivery_time=='2-3d' }}>2-3d</option>
                             <option value="4-8d" {{ 'selected' if data.delivery_time=='4-8d' }}>4-8d</option>
-                            <option value="3-5d" {{ 'selected' if data.delivery_time=='3-5d' }}>3-5d</option>
+                            <option value="3-5d" {{ 'selected' if data.delivery_time=='3-5d' or not data.delivery_time }}>3-5d</option>
                             <option value="1-8d" {{ 'selected' if data.delivery_time=='1-8d' }}>1-8d</option>
                         </select>
                     </div>
@@ -357,7 +357,7 @@
                         <label for="Afleverwijze">Afleverwijze:</label>
                         <select id="Afleverwijze" name="Afleverwijze">
                             <option value="">Selecteer afleverwijze</option>
-                            <option value="verkoper" {{ 'selected' if data.delivery_method=='verkoper' }}>verkoper
+                            <option value="verkoper" {{ 'selected' if data.delivery_method=='verkoper' or not data.delivery_method }}>verkoper
                             </option>
                             <option value="Lbv" {{ 'selected' if data.delivery_method=='Lbv' }}>Lbv</option>
                         </select>
@@ -467,7 +467,38 @@
                 }
             });
 
+            // Auto-prijs: bereken de verkoopprijs zo dat de winst/marge op
+            // TARGET_MARGIN euro uitkomt (omgekeerde van de marge-formule).
+            // Alleen als er nog geen prijs is ingevuld; een handmatig
+            // ingevoerde prijs wordt nooit overschreven.
+            const TARGET_MARGIN = 10;
+            let priceAutoFilled = false;
+
+            function autoFillPrice() {
+                const cost = parseFloat(costInput.value) || 0;
+                if (cost <= 0) return;
+                if (priceInput.value && !priceAutoFilled) return; // handmatige prijs respecteren
+                const shipping = parseFloat(shippingInput.value) || 0;
+                const commPerc = parseFloat(commPercInput.value) || 0;
+                const commFixed = parseFloat(commFixedInput.value) || 0;
+                // marge = P/1.21 - cost - shipping - commFixed - P*(commPerc/100)
+                // => P = (marge + cost + shipping + commFixed) / (1/1.21 - commPerc/100)
+                const factor = (1 / 1.21) - (commPerc / 100);
+                if (factor <= 0) return;
+                const target = (TARGET_MARGIN + cost + shipping + commFixed) / factor;
+                priceInput.value = (Math.ceil(target * 100) / 100).toFixed(2);
+                priceAutoFilled = true;
+            }
+
+            priceInput.addEventListener('input', function () { priceAutoFilled = false; });
+            [costInput, shippingInput, commPercInput, commFixedInput].forEach(input => {
+                if (input) {
+                    input.addEventListener('input', function () { autoFillPrice(); calculate(); });
+                }
+            });
+
             // Initial calculation
+            autoFillPrice();
             calculate();
 
             // AI Description Optimization
